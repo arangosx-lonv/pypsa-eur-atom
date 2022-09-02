@@ -190,160 +190,178 @@ from pypsa.geo import haversine
 from shapely.geometry import LineString
 import time
 from dask.distributed import Client, LocalCluster
+import yaml
 
 from _helpers import configure_logging
 
 logger = logging.getLogger(__name__)
 
+# Snakemake parameters replicated here
+with open('../config.yaml') as f:
+    config = yaml.safe_load(f)
+
+class filepaths:
+    class input:
+        base_network = '../networks/base.nc'
+        corine = '../data/bundle/corine/g250_clc06_V18_5.tif'
+        natura = '../resources/natura.tiff'
+        gebco = '../data/bundle/gebco/gebco_2022_n75.0_s30.0_w-20.0_e40.0.nc'
+        ship_density = '../resources/shipdensity_raster.nc'
+        country_shapes = '../resources/country_shapes.geojson'
+        offshore_shapes = '../resources/offshore_shapes.geojson'
+        regions = lambda w: ('../resources/regions_onshore.geojson'
+                             if w in ('onwind' 'solar')
+                             else '../resources/regions_offshore.geojson')
+        cutout = lambda w: '../cutouts/' + config['renewable'][w]['cutout'] + '.nc'
+
+    output = lambda w: '../resources/profile_' + w + '.nc'
+
 
 if __name__ == '__main__':
-    if 'snakemake' not in globals():
-        from _helpers import mock_snakemake
-        snakemake = mock_snakemake('build_renewable_profiles', technology='solar')
-    configure_logging(snakemake)
     pgb.streams.wrap_stderr()
 
-    nprocesses = int(snakemake.threads)
-    noprogress = not snakemake.config['atlite'].get('show_progress', False)
-    config = snakemake.config['renewable'][snakemake.wildcards.technology]
-    resource = config['resource'] # pv panel config / wind turbine config
-    correction_factor = config.get('correction_factor', 1.)
-    capacity_per_sqkm = config['capacity_per_sqkm']
-    p_nom_max_meth = config.get('potential', 'conservative')
+    nprocesses = int(config['atlite'].get('nprocesses', 4))
+    noprogress = not config['atlite'].get('show_progress', False)
 
-    if isinstance(config.get("corine", {}), list):
-        config['corine'] = {'grid_codes': config['corine']}
+    for technology in config['renewable']:
+        if technology == 'hydro':
+            continue
 
-    if correction_factor != 1.:
-        logger.info(f'correction_factor is set as {correction_factor}')
+        tech_config = config['renewable'][technology]
+        resource = tech_config['resource'] # pv panel config / wind turbine config
+        correction_factor = tech_config.get('correction_factor', 1.)
+        capacity_per_sqkm = tech_config['capacity_per_sqkm']
+        p_nom_max_meth = tech_config.get('potential', 'conservative')
 
-    cluster = LocalCluster(n_workers=nprocesses, threads_per_worker=1)
-    client = Client(cluster, asynchronous=True)
- 
-    cutout = atlite.Cutout(snakemake.input['cutout'])
-    regions = gpd.read_file(snakemake.input.regions)
-    assert not regions.empty, (f"List of regions in {snakemake.input.regions} is empty, please "
-                               "disable the corresponding renewable technology")
-    # do not pull up, set_index does not work if geo dataframe is empty
-    regions = regions.set_index('name').rename_axis('bus')
-    buses = regions.index
+        if isinstance(tech_config.get("corine", {}), list):
+            tech_config['corine'] = {'grid_codes': tech_config['corine']}
 
-    res = config.get("excluder_resolution", 100)
-    excluder = atlite.ExclusionContainer(crs=3035, res=res)
+        if correction_factor != 1.:
+            logger.info(f'correction_factor is set as {correction_factor}')
 
-    if config['natura']:
-        excluder.add_raster(snakemake.input.natura, nodata=0, allow_no_overlap=True)
+        cluster = LocalCluster(n_workers=nprocesses, threads_per_worker=1)
+        client = Client(cluster, asynchronous=True)
 
-    corine = config.get("corine", {})
-    if "grid_codes" in corine:
-        codes = corine["grid_codes"]
-        excluder.add_raster(snakemake.input.corine, codes=codes, invert=True, crs=3035)
-    if corine.get("distance", 0.) > 0.:
-        codes = corine["distance_grid_codes"]
-        buffer = corine["distance"]
-        excluder.add_raster(snakemake.input.corine, codes=codes, buffer=buffer, crs=3035)
-    
-    if "ship_threshold" in config:
-        shipping_threshold=config["ship_threshold"] * 8760 * 6 # approximation because 6 years of data which is hourly collected
-        func = functools.partial(np.less, shipping_threshold)
-        excluder.add_raster(snakemake.input.ship_density, codes=func, crs=4326, allow_no_overlap=True)
+        cutout = atlite.Cutout(filepaths.input.cutout(technology))
+        regions = gpd.read_file(filepaths.input.regions(technology))
+        assert not regions.empty, (f"List of regions in {filepaths.input.regions(technology)} is empty, please "
+                                   "disable the corresponding renewable technology")
+        # do not pull up, set_index does not work if geo dataframe is empty
+        regions = regions.set_index('name').rename_axis('bus')
+        buses = regions.index
 
-    if "max_depth" in config:
-        # lambda not supported for atlite + multiprocessing
-        # use named function np.greater with partially frozen argument instead
-        # and exclude areas where: -max_depth > grid cell depth
-        func = functools.partial(np.greater,-config['max_depth'])
-        excluder.add_raster(snakemake.input.gebco, codes=func, crs=4326, nodata=-1000)
+        res = tech_config.get("excluder_resolution", 100)
+        excluder = atlite.ExclusionContainer(crs=3035, res=res)
 
-    if 'min_shore_distance' in config:
-        buffer = config['min_shore_distance']
-        excluder.add_geometry(snakemake.input.country_shapes, buffer=buffer)
+        if tech_config['natura']:
+            excluder.add_raster(filepaths.input.natura, nodata=0, allow_no_overlap=True)
 
-    if 'max_shore_distance' in config:
-        buffer = config['max_shore_distance']
-        excluder.add_geometry(snakemake.input.country_shapes, buffer=buffer, invert=True)
+        corine = tech_config.get("corine", {})
+        if "grid_codes" in corine:
+            codes = corine["grid_codes"]
+            excluder.add_raster(filepaths.input.corine, codes=codes, invert=True, crs=3035)
+        if corine.get("distance", 0.) > 0.:
+            codes = corine["distance_grid_codes"]
+            buffer = corine["distance"]
+            excluder.add_raster(filepaths.input.corine, codes=codes, buffer=buffer, crs=3035)
 
-    kwargs = dict(nprocesses=nprocesses, disable_progressbar=noprogress)
-    if noprogress:
-        logger.info('Calculate landuse availabilities...')
-        start = time.time()
-        availability = cutout.availabilitymatrix(regions, excluder, **kwargs)
-        duration = time.time() - start
-        logger.info(f'Completed availability calculation ({duration:2.2f}s)')
-    else:
-        availability = cutout.availabilitymatrix(regions, excluder, **kwargs)
+        if "ship_threshold" in tech_config:
+            shipping_threshold=tech_config["ship_threshold"] * 8760 * 6 # approximation because 6 years of data which is hourly collected
+            func = functools.partial(np.less, shipping_threshold)
+            excluder.add_raster(filepaths.input.ship_density, codes=func, crs=4326, allow_no_overlap=True)
 
-    area = cutout.grid.to_crs(3035).area / 1e6
-    area = xr.DataArray(area.values.reshape(cutout.shape),
-                        [cutout.coords['y'], cutout.coords['x']])
+        if "max_depth" in tech_config:
+            # lambda not supported for atlite + multiprocessing
+            # use named function np.greater with partially frozen argument instead
+            # and exclude areas where: -max_depth > grid cell depth
+            func = functools.partial(np.greater,-tech_config['max_depth'])
+            excluder.add_raster(filepaths.input.gebco, codes=func, crs=4326, nodata=-1000)
 
-    potential = capacity_per_sqkm * availability.sum('bus') * area
-    func = getattr(cutout, resource.pop('method'))
-    resource['dask_kwargs'] = {"scheduler": client}
-    capacity_factor = correction_factor * func(capacity_factor=True, **resource)
-    layout = capacity_factor * area * capacity_per_sqkm
-    profile, capacities = func(matrix=availability.stack(spatial=['y','x']),
-                                layout=layout, index=buses,
-                                per_unit=True, return_capacity=True, **resource)
+        if 'min_shore_distance' in tech_config:
+            buffer = tech_config['min_shore_distance']
+            excluder.add_geometry(filepaths.input.country_shapes, buffer=buffer)
 
-    logger.info(f"Calculating maximal capacity per bus (method '{p_nom_max_meth}')")
-    if p_nom_max_meth == 'simple':
-        p_nom_max = capacity_per_sqkm * availability @ area
-    elif p_nom_max_meth == 'conservative':
-        max_cap_factor = capacity_factor.where(availability!=0).max(['x', 'y'])
-        p_nom_max = capacities / max_cap_factor
-    else:
-        raise AssertionError('Config key `potential` should be one of "simple" '
-                        f'(default) or "conservative", not "{p_nom_max_meth}"')
+        if 'max_shore_distance' in tech_config:
+            buffer = tech_config['max_shore_distance']
+            excluder.add_geometry(filepaths.input.country_shapes, buffer=buffer, invert=True)
 
+        kwargs = dict(nprocesses=nprocesses, disable_progressbar=noprogress)
+        if noprogress:
+            logger.info('Calculate landuse availabilities...')
+            start = time.time()
+            availability = cutout.availabilitymatrix(regions, excluder, **kwargs)
+            duration = time.time() - start
+            logger.info(f'Completed availability calculation ({duration:2.2f}s)')
+        else:
+            availability = cutout.availabilitymatrix(regions, excluder, **kwargs)
 
+        area = cutout.grid.to_crs(3035).area / 1e6
+        area = xr.DataArray(area.values.reshape(cutout.shape),
+                            [cutout.coords['y'], cutout.coords['x']])
 
-    logger.info('Calculate average distances.')
-    layoutmatrix = (layout * availability).stack(spatial=['y','x'])
+        potential = capacity_per_sqkm * availability.sum('bus') * area
+        func = getattr(cutout, resource.pop('method'))
+        resource['dask_kwargs'] = {"scheduler": client}
+        capacity_factor = correction_factor * func(capacity_factor=True, **resource)
+        layout = capacity_factor * area * capacity_per_sqkm
+        profile, capacities = func(matrix=availability.stack(spatial=['y','x']),
+                                    layout=layout, index=buses,
+                                    per_unit=True, return_capacity=True, **resource)
 
-    coords = cutout.grid[['x', 'y']]
-    bus_coords = regions[['x', 'y']]
+        logger.info(f"Calculating maximal capacity per bus (method '{p_nom_max_meth}')")
+        if p_nom_max_meth == 'simple':
+            p_nom_max = capacity_per_sqkm * availability @ area
+        elif p_nom_max_meth == 'conservative':
+            max_cap_factor = capacity_factor.where(availability!=0).max(['x', 'y'])
+            p_nom_max = capacities / max_cap_factor
+        else:
+            raise AssertionError('Config key `potential` should be one of "simple" '
+                            f'(default) or "conservative", not "{p_nom_max_meth}"')
 
-    average_distance = []
-    centre_of_mass = []
-    for bus in buses:
-        row = layoutmatrix.sel(bus=bus).data
-        nz_b = row != 0
-        row = row[nz_b]
-        co = coords[nz_b]
-        distances = haversine(bus_coords.loc[bus],  co)
-        average_distance.append((distances * (row / row.sum())).sum())
-        centre_of_mass.append(co.values.T @ (row / row.sum()))
+        logger.info('Calculate average distances.')
+        layoutmatrix = (layout * availability).stack(spatial=['y','x'])
 
-    average_distance = xr.DataArray(average_distance, [buses])
-    centre_of_mass = xr.DataArray(centre_of_mass, [buses, ('spatial', ['x', 'y'])])
-
-
-    ds = xr.merge([(correction_factor * profile).rename('profile'),
-                    capacities.rename('weight'),
-                    p_nom_max.rename('p_nom_max'),
-                    potential.rename('potential'),
-                    average_distance.rename('average_distance')])
-
-
-    if snakemake.wildcards.technology.startswith("offwind"):
-        logger.info('Calculate underwater fraction of connections.')
-        offshore_shape = gpd.read_file(snakemake.input['offshore_shapes']).unary_union
-        underwater_fraction = []
+        coords = cutout.grid[['x', 'y']]
+        bus_coords = regions[['x', 'y']]
+        average_distance = []
+        centre_of_mass = []
         for bus in buses:
-            p = centre_of_mass.sel(bus=bus).data
-            line = LineString([p, regions.loc[bus, ['x', 'y']]])
-            frac = line.intersection(offshore_shape).length/line.length
-            underwater_fraction.append(frac)
+            row = layoutmatrix.sel(bus=bus).data
+            nz_b = row != 0
+            row = row[nz_b]
+            co = coords[nz_b]
+            distances = haversine(bus_coords.loc[bus],  co)
+            average_distance.append((distances * (row / row.sum())).sum())
+            centre_of_mass.append(co.values.T @ (row / row.sum()))
 
-        ds['underwater_fraction'] = xr.DataArray(underwater_fraction, [buses])
+        average_distance = xr.DataArray(average_distance, [buses])
+        centre_of_mass = xr.DataArray(centre_of_mass, [buses, ('spatial', ['x', 'y'])])
 
-    # select only buses with some capacity and minimal capacity factor
-    ds = ds.sel(bus=((ds['profile'].mean('time') > config.get('min_p_max_pu', 0.)) &
-                      (ds['p_nom_max'] > config.get('min_p_nom_max', 0.))))
+        ds = xr.merge([(correction_factor * profile).rename('profile'),
+                        capacities.rename('weight'),
+                        p_nom_max.rename('p_nom_max'),
+                        potential.rename('potential'),
+                        average_distance.rename('average_distance')])
 
-    if 'clip_p_max_pu' in config:
-        min_p_max_pu = config['clip_p_max_pu']
-        ds['profile'] = ds['profile'].where(ds['profile'] >= min_p_max_pu, 0)
 
-    ds.to_netcdf(snakemake.output.profile)
+        if technology.startswith("offwind"):
+            logger.info('Calculate underwater fraction of connections.')
+            offshore_shape = gpd.read_file(filepaths.input.offshore_shapes).unary_union
+            underwater_fraction = []
+            for bus in buses:
+                p = centre_of_mass.sel(bus=bus).data
+                line = LineString([p, regions.loc[bus, ['x', 'y']]])
+                frac = line.intersection(offshore_shape).length/line.length
+                underwater_fraction.append(frac)
+
+            ds['underwater_fraction'] = xr.DataArray(underwater_fraction, [buses])
+
+        # select only buses with some capacity and minimal capacity factor
+        ds = ds.sel(bus=((ds['profile'].mean('time') > tech_config.get('min_p_max_pu', 0.)) &
+                          (ds['p_nom_max'] > tech_config.get('min_p_nom_max', 0.))))
+
+        if 'clip_p_max_pu' in tech_config:
+            min_p_max_pu = tech_config['clip_p_max_pu']
+            ds['profile'] = ds['profile'].where(ds['profile'] >= min_p_max_pu, 0)
+
+        ds.to_netcdf(filepaths.output(technology))

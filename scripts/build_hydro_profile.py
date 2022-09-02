@@ -62,6 +62,7 @@ Description
 import logging
 from _helpers import configure_logging
 
+import yaml
 import atlite
 import geopandas as gpd
 import pandas as pd
@@ -69,6 +70,17 @@ import pandas as pd
 import country_converter as coco
 cc = coco.CountryConverter()
 
+# Snakemake parameters replicated here
+with open('../config.yaml') as f:
+    config = yaml.safe_load(f)
+
+class filepaths:
+    class input:
+        country_shapes = '../resources/country_shapes.geojson'
+        eia_hydro_generation = '../data/eia_hydro_annual_generation.csv'
+        cutout = f"../cutouts/{config['renewable']['hydro']['cutout']}.nc" if 'hydro' in config['renewable'] else "config['renewable']['hydro']['cutout'] not configured"
+
+    output = '../resources/profile_hydro.nc'
 
 def get_eia_annual_hydro_generation(fn, countries):
 
@@ -114,20 +126,15 @@ def get_eia_annual_hydro_generation(fn, countries):
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
-    if 'snakemake' not in globals():
-        from _helpers import mock_snakemake
-        snakemake = mock_snakemake('build_hydro_profile')
-    configure_logging(snakemake)
+    config_hydro = config['renewable']['hydro']
+    cutout = atlite.Cutout(filepaths.input.cutout)
 
-    config_hydro = snakemake.config['renewable']['hydro']
-    cutout = atlite.Cutout(snakemake.input.cutout)
-
-    countries = snakemake.config['countries']
-    country_shapes = (gpd.read_file(snakemake.input.country_shapes)
+    countries = config['countries']
+    country_shapes = (gpd.read_file(filepaths.input.country_shapes)
                       .set_index('name')['geometry'].reindex(countries))
     country_shapes.index.name = 'countries'
 
-    fn = snakemake.input.eia_hydro_generation
+    fn = filepaths.input.eia_hydro_generation
     eia_stats = get_eia_annual_hydro_generation(fn, countries)
     
     inflow = cutout.runoff(shapes=country_shapes,
@@ -138,4 +145,4 @@ if __name__ == "__main__":
     if 'clip_min_inflow' in config_hydro:
         inflow = inflow.where(inflow > config_hydro['clip_min_inflow'], 0)
 
-    inflow.to_netcdf(snakemake.output[0])
+    inflow.to_netcdf(filepaths.output)

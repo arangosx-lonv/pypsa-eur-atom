@@ -45,6 +45,7 @@ import logging
 from _helpers import configure_logging, REGION_COLS
 
 import pypsa
+import yaml
 import os
 import pandas as pd
 import numpy as np
@@ -53,6 +54,20 @@ from shapely.geometry import Polygon
 from scipy.spatial import Voronoi
 
 logger = logging.getLogger(__name__)
+
+# Snakemake parameters replicated here
+with open('../config.yaml') as f:
+    config = yaml.safe_load(f)
+
+class filepaths:
+    class input:
+        country_shapes = '../resources/country_shapes.geojson'
+        offshore_shapes = '../resources/offshore_shapes.geojson'
+        base_network = '../networks/base.nc'
+
+    class output:
+        regions_onshore = '../resources/regions_onshore.geojson'
+        regions_offshore = '../resources/regions_offshore.geojson'
 
 
 def voronoi_partition_pts(points, outline):
@@ -103,17 +118,12 @@ def voronoi_partition_pts(points, outline):
 
 
 if __name__ == "__main__":
-    if 'snakemake' not in globals():
-        from _helpers import mock_snakemake
-        snakemake = mock_snakemake('build_bus_regions')
-    configure_logging(snakemake)
+    countries = config['countries']
 
-    countries = snakemake.config['countries']
+    n = pypsa.Network(filepaths.input.base_network)
 
-    n = pypsa.Network(snakemake.input.base_network)
-
-    country_shapes = gpd.read_file(snakemake.input.country_shapes).set_index('name')['geometry']
-    offshore_shapes = gpd.read_file(snakemake.input.offshore_shapes)
+    country_shapes = gpd.read_file(filepaths.input.country_shapes).set_index('name')['geometry']
+    offshore_shapes = gpd.read_file(filepaths.input.offshore_shapes)
     offshore_shapes = offshore_shapes.reindex(columns=REGION_COLS).set_index('name')['geometry']
 
     onshore_regions = []
@@ -145,8 +155,8 @@ if __name__ == "__main__":
         offshore_regions_c = offshore_regions_c.loc[offshore_regions_c.area > 1e-2]
         offshore_regions.append(offshore_regions_c)
 
-    pd.concat(onshore_regions, ignore_index=True).to_file(snakemake.output.regions_onshore)
+    pd.concat(onshore_regions, ignore_index=True).to_file(filepaths.output.regions_onshore)
     if offshore_regions:
-        pd.concat(offshore_regions, ignore_index=True).to_file(snakemake.output.regions_offshore)
+        pd.concat(offshore_regions, ignore_index=True).to_file(filepaths.output.regions_offshore)
     else:
-        offshore_shapes.to_frame().to_file(snakemake.output.regions_offshore)
+        offshore_shapes.to_frame().to_file(filepaths.output.regions_offshore)

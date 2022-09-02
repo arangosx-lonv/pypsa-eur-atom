@@ -74,6 +74,7 @@ The configuration options ``electricity: powerplants_filter`` and ``electricity:
 import logging
 from _helpers import configure_logging
 
+import yaml
 import pypsa
 import powerplantmatching as pm
 import pandas as pd
@@ -81,6 +82,17 @@ import pandas as pd
 from powerplantmatching.export import map_country_bus
 
 logger = logging.getLogger(__name__)
+
+# Snakemake parameters replicated here
+with open('../config.yaml') as f:
+    config = yaml.safe_load(f)
+
+class filepaths:
+    class input:
+        base_network = '../networks/base.nc'
+        custom_powerplants = '../data/custom_powerplants.csv'
+
+    output = '../resources/powerplants.csv'
 
 
 def add_custom_powerplants(ppl, custom_powerplants, custom_ppl_query=False):
@@ -103,14 +115,9 @@ def replace_natural_gas_fueltype(df):
  
 
 if __name__ == "__main__":
-    if 'snakemake' not in globals():
-        from _helpers import mock_snakemake
-        snakemake = mock_snakemake('build_powerplants')
-    configure_logging(snakemake)
 
-    n = pypsa.Network(snakemake.input.base_network)
+    n = pypsa.Network(filepaths.input.base_network)
     countries = n.buses.country.unique()
-
 
     ppl = (pm.powerplants(from_url=True)
            .powerplant.fill_missing_decommissioning_years()
@@ -127,13 +134,13 @@ if __name__ == "__main__":
     ppl = ppl.query('not (Country in @available_countries and Fueltype == "Bioenergy")') 
     ppl = pd.concat([ppl, opsd])
     
-    ppl_query = snakemake.config['electricity']['powerplants_filter']
+    ppl_query = config['electricity']['powerplants_filter']
     if isinstance(ppl_query, str):
         ppl.query(ppl_query, inplace=True)
 
     # add carriers from own powerplant files:
-    custom_ppl_query = snakemake.config['electricity']['custom_powerplants']
-    ppl = add_custom_powerplants(ppl, snakemake.input.custom_powerplants, custom_ppl_query)
+    custom_ppl_query = config['electricity']['custom_powerplants']
+    ppl = add_custom_powerplants(ppl, filepaths.input.custom_powerplants, custom_ppl_query)
 
     countries_wo_ppl = set(countries)-set(ppl.Country.unique())
     if countries_wo_ppl:
@@ -152,4 +159,4 @@ if __name__ == "__main__":
     cumcount = ppl.groupby(['bus', 'Fueltype']).cumcount() + 1
     ppl.Name = ppl.Name.where(cumcount == 1, ppl.Name + " " + cumcount.astype(str))
 
-    ppl.reset_index(drop=True).to_csv(snakemake.output[0])
+    ppl.reset_index(drop=True).to_csv(filepaths.output)

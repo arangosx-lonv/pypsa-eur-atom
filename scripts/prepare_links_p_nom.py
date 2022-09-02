@@ -39,9 +39,17 @@ Description
 import logging
 from _helpers import configure_logging
 
+import yaml
 import pandas as pd
 
 logger = logging.getLogger(__name__)
+
+# Snakemake parameters replicated here
+with open('../config.yaml') as f:
+    config = yaml.safe_load(f)
+
+class filepaths:
+    output = '../data/links_p_nom.csv'
 
 
 def multiply(s):
@@ -58,10 +66,6 @@ def extract_coordinates(s):
 
 
 if __name__ == "__main__":
-    if 'snakemake' not in globals():
-        from _helpers import mock_snakemake #rule must be enabled in config
-        snakemake = mock_snakemake('prepare_links_p_nom', simpl='')
-    configure_logging(snakemake)
 
     links_p_nom = pd.read_html('https://en.wikipedia.org/wiki/List_of_HVDC_projects', header=0, match="SwePol")[0]
 
@@ -74,4 +78,4 @@ if __name__ == "__main__":
     links_p_nom['x1'], links_p_nom['y1'] = extract_coordinates(links_p_nom['Converterstation 1'])
     links_p_nom['x2'], links_p_nom['y2'] = extract_coordinates(links_p_nom['Converterstation 2'])
 
-    links_p_nom.dropna(subset=['x1', 'y1', 'x2', 'y2']).to_csv(snakemake.output[0], index=False)
+    links_p_nom.dropna(subset=['x1', 'y1', 'x2', 'y2']).to_csv(filepaths.output, index=False)

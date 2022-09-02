@@ -81,6 +81,26 @@ import shapely, shapely.prepared, shapely.wkt
 
 logger = logging.getLogger(__name__)
 
+# Snakemake parameters replicated here
+with open('../config.yaml') as f:
+    config = yaml.safe_load(f)
+
+class filepaths:
+    class input:
+        eg_buses = '../data/entsoegridkit/buses.csv'
+        eg_lines = '../data/entsoegridkit/lines.csv'
+        eg_links = '../data/entsoegridkit/links.csv'
+        eg_converters = '../data/entsoegridkit/converters.csv'
+        eg_transformers = '../data/entsoegridkit/transformers.csv'
+        parameter_corrections = '../data/parameter_corrections.yaml'
+        links_p_nom = '../data/links_p_nom.csv'
+        links_tyndp = '../data/links_tyndp.csv'
+        country_shapes = '../resources/country_shapes.geojson'
+        offshore_shapes = '../resources/offshore_shapes.geojson'
+        europe_shape = '../resources/europe_shape.geojson'
+
+    output = '../networks/base.nc'
+
 
 def _get_oid(df):
     if "tags" in df.columns:
@@ -587,14 +607,9 @@ def base_network(eg_buses, eg_converters, eg_transformers, eg_lines, eg_links,
     return n
 
 if __name__ == "__main__":
-    if 'snakemake' not in globals():
-        from _helpers import mock_snakemake
-        snakemake = mock_snakemake('base_network')
-    configure_logging(snakemake)
+    n = base_network(filepaths.input.eg_buses, filepaths.input.eg_converters, filepaths.input.eg_transformers, filepaths.input.eg_lines, filepaths.input.eg_links,
+                     filepaths.input.links_p_nom, filepaths.input.links_tyndp, filepaths.input.europe_shape, filepaths.input.country_shapes, filepaths.input.offshore_shapes,
+                     filepaths.input.parameter_corrections, config)
 
-    n = base_network(snakemake.input.eg_buses, snakemake.input.eg_converters, snakemake.input.eg_transformers, snakemake.input.eg_lines, snakemake.input.eg_links,
-                     snakemake.input.links_p_nom, snakemake.input.links_tyndp, snakemake.input.europe_shape, snakemake.input.country_shapes, snakemake.input.offshore_shapes,
-                     snakemake.input.parameter_corrections, snakemake.config)
-
-    n.meta = snakemake.config
-    n.export_to_netcdf(snakemake.output[0])
+    n.meta = config
+    n.export_to_netcdf(filepaths.output)

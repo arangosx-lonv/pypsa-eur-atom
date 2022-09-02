@@ -86,6 +86,7 @@ It further adds extendable ``generators`` with **zero** capacity for
 import logging
 from _helpers import configure_logging, update_p_nom_max
 
+import yaml
 import pypsa
 import pandas as pd
 import numpy as np
@@ -98,6 +99,28 @@ from vresutils import transfer as vtransfer
 idx = pd.IndexSlice
 
 logger = logging.getLogger(__name__)
+
+
+with open('../config.yaml') as f:
+    config = yaml.safe_load(f)
+
+class filepaths:
+    class input:
+        base_network = '../networks/base.nc'
+        tech_costs = "../resources/costs.csv"
+        regions = "../resources/regions_onshore.geojson"
+        powerplants = '../resources/powerplants.csv'
+        hydro_capacities = '../data/bundle/hydro_capacities.csv'
+        geth_hydro_capacities = '../data/geth2015_hydro_capacities.csv'
+        load = '../resources/load.csv'
+        nuts3_shapes = '../resources/nuts3_shapes.geojson'
+        profile = lambda w: '../resources/profile_' + w + '.nc'
+        # Attributes excluded for now, as conventional generators not currently included
+        # attributes = {f"conventional_{tech}_{attr}": config['conventional'][tech][attr]
+        #               for tech in config['conventional']
+        #               for attr in config['conventional'].get(tech, {})}
+
+    output = "../networks/elec.nc"
 
 
 def normed(s): return s/s.sum()
@@ -251,8 +274,7 @@ def update_transmission_costs(n, costs, length_factor=1.0):
             costs.at['HVDC inverter pair', 'capital_cost'])
     n.links.loc[dc_b, 'capital_cost'] = costs
 
-
-def attach_wind_and_solar(n, costs, input_profiles, technologies, extendable_carriers, line_length_factor=1):
+def attach_wind_and_solar(n, costs, technologies, extendable_carriers, line_length_factor=1):
     # TODO: rename tech -> carrier, technologies -> carriers
     _add_missing_carriers_from_costs(n, costs, technologies)
 
@@ -260,7 +282,7 @@ def attach_wind_and_solar(n, costs, input_profiles, technologies, extendable_car
         if tech == 'hydro': 
             continue
 
-        with xr.open_dataset(getattr(input_profiles, 'profile_' + tech)) as ds:
+        with xr.open_dataset(filepaths.input.profile(tech)) as ds:
             if ds.indexes['bus'].empty: continue
 
             suptech = tech.split('-', 2)[0]
@@ -560,59 +582,56 @@ def add_nice_carrier_names(n, config):
     n.carriers['color'] = colors
 
 if __name__ == "__main__":
-    if 'snakemake' not in globals():
-        from _helpers import mock_snakemake
-        snakemake = mock_snakemake('add_electricity')
-    configure_logging(snakemake)
 
-    n = pypsa.Network(snakemake.input.base_network)
+    n = pypsa.Network(filepaths.input.base_network)
     Nyears = n.snapshot_weightings.objective.sum() / 8760.
 
-    costs = load_costs(snakemake.input.tech_costs, snakemake.config['costs'], snakemake.config['electricity'], Nyears)
-    ppl = load_powerplants(snakemake.input.powerplants)
+    costs = load_costs(filepaths.input.tech_costs, config['costs'], config['electricity'], Nyears)
+    ppl = load_powerplants(filepaths.input.powerplants)
     
-    if "renewable_carriers" in snakemake.config['electricity']:    
-        renewable_carriers = set(snakemake.config['renewable'])
+    if "renewable_carriers" in config['electricity']:
+        renewable_carriers = set(config['renewable'])
     else: 
         logger.warning("Missing key `renewable_carriers` under config entry `electricity`. "
                        "In future versions, this will raise an error. "
                        "Falling back to carriers listed under `renewable`.")
-        renewable_carriers = snakemake.config['renewable']
+        renewable_carriers = config['renewable']
 
-    extendable_carriers = snakemake.config['electricity']['extendable_carriers']
+    extendable_carriers = config['electricity']['extendable_carriers']
     if not (set(renewable_carriers) & set(extendable_carriers['Generator'])):
         logger.warning("No renewables found in config entry `extendable_carriers`. "
-                       "In future versions, these have to be explicitely listed. "
+                       "In future versions, these have to be explicitly listed. "
                        "Falling back to all renewables.")
     
-    conventional_carriers = snakemake.config["electricity"]["conventional_carriers"]
+    conventional_carriers = config["electricity"]["conventional_carriers"]
 
 
-    attach_load(n, snakemake.input.regions, snakemake.input.load, snakemake.input.nuts3_shapes,
-                snakemake.config['countries'], snakemake.config['load']['scaling_factor'])
+    attach_load(n, filepaths.input.regions, filepaths.input.load, filepaths.input.nuts3_shapes,
+                config['countries'], config['load']['scaling_factor'])
 
-    update_transmission_costs(n, costs, snakemake.config['lines']['length_factor'])
+    update_transmission_costs(n, costs, config['lines']['length_factor'])
 
-    conventional_inputs = {k: v for k, v in snakemake.input.items() if k.startswith("conventional_")}
-    attach_conventional_generators(n, costs, ppl, conventional_carriers, extendable_carriers, snakemake.config.get("conventional", {}), conventional_inputs)
+    # Commenting out for now
+    # conventional_inputs = {k: v for k, v in filepaths.input.attributes if k.startswith("conventional_")}
+    # attach_conventional_generators(n, costs, ppl, conventional_carriers, extendable_carriers, config.get("conventional", {}), conventional_inputs)
 
-    attach_wind_and_solar(n, costs, snakemake.input, renewable_carriers, extendable_carriers, snakemake.config['lines']['length_factor'])
+    attach_wind_and_solar(n, costs, renewable_carriers, extendable_carriers, config['lines']['length_factor'])
 
     if 'hydro' in renewable_carriers:
-        conf = snakemake.config['renewable']['hydro']
-        attach_hydro(n, costs, ppl, snakemake.input.profile_hydro, snakemake.input.hydro_capacities, 
+        conf = config['renewable']['hydro']
+        attach_hydro(n, costs, ppl, filepaths.input.profile('hydro'), filepaths.input.hydro_capacities,
                      conf.pop('carriers', []), **conf)
 
-    if "estimate_renewable_capacities" not in snakemake.config['electricity']:
+    if "estimate_renewable_capacities" not in config['electricity']:
         logger.warning("Missing key `estimate_renewable_capacities` under config entry `electricity`. "
                        "In future versions, this will raise an error. "
                        "Falling back to whether ``estimate_renewable_capacities_from_capacity_stats`` is in the config.")
-        if "estimate_renewable_capacities_from_capacity_stats" in snakemake.config['electricity']:
-            estimate_renewable_caps = {'enable': True, **snakemake.config['electricity']["estimate_renewable_capacities_from_capacity_stats"]}
+        if "estimate_renewable_capacities_from_capacity_stats" in config['electricity']:
+            estimate_renewable_caps = {'enable': True, **config['electricity']["estimate_renewable_capacities_from_capacity_stats"]}
         else:
             estimate_renewable_caps = {'enable': False}
     else:
-        estimate_renewable_caps = snakemake.config['electricity']["estimate_renewable_capacities"]
+        estimate_renewable_caps = config['electricity']["estimate_renewable_capacities"]
     if "enable" not in estimate_renewable_caps:
         logger.warning("Missing key `enable` under config entry `estimate_renewable_capacities`. "
                        "In future versions, this will raise an error. Falling back to False.")
@@ -621,19 +640,19 @@ if __name__ == "__main__":
         logger.warning("Missing key `from_opsd` under config entry `estimate_renewable_capacities`. "
                        "In future versions, this will raise an error. "
                        "Falling back to whether `renewable_capacities_from_opsd` is non-empty.")
-        from_opsd = bool(snakemake.config["electricity"].get("renewable_capacities_from_opsd", False))
+        from_opsd = bool(config["electricity"].get("renewable_capacities_from_opsd", False))
         estimate_renewable_caps['from_opsd'] = from_opsd
     
 
     if estimate_renewable_caps["enable"]:        
         if estimate_renewable_caps["from_opsd"]:
-            tech_map = snakemake.config["electricity"]["estimate_renewable_capacities"]["technology_mapping"]
+            tech_map = config["electricity"]["estimate_renewable_capacities"]["technology_mapping"]
             attach_OPSD_renewables(n, tech_map)
-        estimate_renewable_capacities(n, snakemake.config)
+        estimate_renewable_capacities(n, config)
 
     update_p_nom_max(n)
 
-    add_nice_carrier_names(n, snakemake.config)
+    add_nice_carrier_names(n, config)
 
-    n.meta = snakemake.config
-    n.export_to_netcdf(snakemake.output[0])
+    n.meta = config
+    n.export_to_netcdf(filepaths.output)

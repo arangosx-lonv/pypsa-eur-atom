@@ -42,6 +42,7 @@ Description
 import logging
 from _helpers import configure_logging
 
+import yaml
 import atlite
 import geopandas as gpd
 import rasterio as rio
@@ -49,6 +50,17 @@ from rasterio.features import geometry_mask
 from rasterio.warp import transform_bounds
 
 logger = logging.getLogger(__name__)
+
+# Snakemake parameters replicated here
+with open('../config.yaml') as f:
+    config = yaml.safe_load(f)
+
+class filepaths:
+    class input:
+        natura = "data/bundle/natura/Natura2000_end2015.shp",
+        cutouts = {f"../cutouts/{cut}.nc" for cut in config['atlite']['cutouts']}
+
+    output = '../resources/natura.tiff'
 
 
 def determine_cutout_xXyY(cutout_name):
@@ -68,22 +80,17 @@ def get_transform_and_shape(bounds, res):
 
 
 if __name__ == "__main__":
-    if 'snakemake' not in globals():
-        from _helpers import mock_snakemake
-        snakemake = mock_snakemake('build_natura_raster')
-    configure_logging(snakemake)
-
-    cutouts = snakemake.input.cutouts
+    cutouts = filepaths.input.cutouts
     xs, Xs, ys, Ys = zip(*(determine_cutout_xXyY(cutout) for cutout in cutouts))
     bounds = transform_bounds(4326, 3035, min(xs), min(ys), max(Xs), max(Ys))
     transform, out_shape = get_transform_and_shape(bounds, res=100)
 
     # adjusted boundaries
-    shapes = gpd.read_file(snakemake.input.natura).to_crs(3035)
+    shapes = gpd.read_file(filepaths.input.natura).to_crs(3035)
     raster = ~geometry_mask(shapes.geometry, out_shape[::-1], transform)
     raster = raster.astype(rio.uint8)
 
-    with rio.open(snakemake.output[0], 'w', driver='GTiff', dtype=rio.uint8,
+    with rio.open(filepaths.output, 'w', driver='GTiff', dtype=rio.uint8,
                   count=1, transform=transform, crs=3035, compress='lzw',
                   width=raster.shape[1], height=raster.shape[0]) as dst:
         dst.write(raster, indexes=1)

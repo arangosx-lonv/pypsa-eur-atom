@@ -70,6 +70,7 @@ Description
 import logging
 from _helpers import configure_logging
 
+import yaml
 import numpy as np
 from operator import attrgetter
 from functools import reduce
@@ -83,6 +84,26 @@ import pycountry as pyc
 
 logger = logging.getLogger(__name__)
 
+# Snakemake parameters replicated here
+with open('../config.yaml') as f:
+    config = yaml.safe_load(f)
+
+class filepaths:
+    class input:
+        naturalearth = '../data/bundle/naturalearth/ne_10m_admin_0_countries.shp'
+        nuts3 = '../data/bundle/NUTS_2013_60M_SH/data/NUTS_RG_60M_2013.shp'
+        #nuts3 = 'data/euroglobalmap/NUTS_3_clean.shp' # Open-source version - DATA REFINEMENT STILL IN PROGRESS
+        nuts3pop = '../data/bundle/nama_10r_3popgdp.tsv.gz'
+        nuts3gdp = '../data/bundle/nama_10r_3gdp.tsv.gz'
+        ch_cantons = '../data/bundle/ch_cantons.csv'
+        ch_popgdp = '../data/bundle/je-e-21.03.02.xls'
+        eez = '../data/bundle/eez/World_EEZ_v8_2014.shp'
+
+    class output:
+        country_shapes = '../resources/country_shapes.geojson'
+        nuts3_shapes = '../resources/nuts3_shapes.geojson'
+        offshore_shapes = '../resources/offshore_shapes.geojson'
+        europe_shape = '../resources/europe_shape.geojson'
 
 def _get_country(target, **keys):
     assert len(keys) == 1
@@ -146,9 +167,15 @@ def country_cover(country_shapes, eez_shapes=None):
 
 def nuts3(country_shapes, nuts3, nuts3pop, nuts3gdp, ch_cantons, ch_popgdp):
     df = gpd.read_file(nuts3)
-    df = df.loc[df['STAT_LEVL_'] == 3]
-    df['geometry'] = df['geometry'].map(_simplify_polys)
-    df = df.rename(columns={'NUTS_ID': 'id'})[['id', 'geometry']].set_index('id')
+    if nuts3 == '../data/euroglobalmap/NUTS_3_clean.shp':
+        print("Using updated NUTS-3 shapefile")
+        df['geometry'] = df['geometry'].map(_simplify_polys)
+        df = df.rename(columns={'NUTS_CODE': 'id'})[['id', 'geometry']].set_index('id')
+    else:
+        print("Using original NUTS-3 shapefile")
+        df = df.loc[df['STAT_LEVL_'] == 3]
+        df['geometry'] = df['geometry'].map(_simplify_polys)
+        df = df.rename(columns={'NUTS_ID': 'id'})[['id', 'geometry']].set_index('id')
 
     pop = pd.read_table(nuts3pop, na_values=[':'], delimiter=' ?\t', engine='python')
     pop = (pop
@@ -204,20 +231,15 @@ def nuts3(country_shapes, nuts3, nuts3pop, nuts3gdp, ch_cantons, ch_popgdp):
 
 
 if __name__ == "__main__":
-    if 'snakemake' not in globals():
-        from _helpers import mock_snakemake
-        snakemake = mock_snakemake('build_shapes')
-    configure_logging(snakemake)
+    country_shapes = countries(filepaths.input.naturalearth, config['countries'])
+    country_shapes.reset_index().to_file(filepaths.output.country_shapes)
 
-    country_shapes = countries(snakemake.input.naturalearth, snakemake.config['countries'])
-    country_shapes.reset_index().to_file(snakemake.output.country_shapes)
-
-    offshore_shapes = eez(country_shapes, snakemake.input.eez, snakemake.config['countries'])
-    offshore_shapes.reset_index().to_file(snakemake.output.offshore_shapes)
+    offshore_shapes = eez(country_shapes, filepaths.input.eez, config['countries'])
+    offshore_shapes.reset_index().to_file(filepaths.output.offshore_shapes)
 
     europe_shape = gpd.GeoDataFrame(geometry=[country_cover(country_shapes, offshore_shapes.geometry)])
-    europe_shape.reset_index().to_file(snakemake.output.europe_shape)
+    europe_shape.reset_index().to_file(filepaths.output.europe_shape)
 
-    nuts3_shapes = nuts3(country_shapes, snakemake.input.nuts3, snakemake.input.nuts3pop,
-                         snakemake.input.nuts3gdp, snakemake.input.ch_cantons, snakemake.input.ch_popgdp)
-    nuts3_shapes.reset_index().to_file(snakemake.output.nuts3_shapes)
+    nuts3_shapes = nuts3(country_shapes, filepaths.input.nuts3, filepaths.input.nuts3pop,
+                         filepaths.input.nuts3gdp, filepaths.input.ch_cantons, filepaths.input.ch_popgdp)
+    nuts3_shapes.reset_index().to_file(filepaths.output.nuts3_shapes)
