@@ -124,6 +124,8 @@ Exemplary unsolved network clustered to 37 nodes:
 import logging
 from _helpers import configure_logging, update_p_nom_max, get_aggregation_strategies
 
+import yaml
+
 import pypsa
 
 import pandas as pd
@@ -146,6 +148,27 @@ from add_electricity import load_costs
 idx = pd.IndexSlice
 
 logger = logging.getLogger(__name__)
+
+# Snakemake parameters replicated here
+with open('../config.yaml') as f:
+    config = yaml.safe_load(f)
+
+class filepaths:
+    class input:
+        network = '../networks/elec_s.nc'
+        regions_onshore = "../resources/regions_onshore_elec_s.geojson"
+        regions_offshore = "../resources/regions_offshore_elec_s.geojson"
+        busmap = '../resources/busmap_elec_s.csv'
+        custom_busmap = lambda w: ('../data/custom_busmap_elec_s_' + w + '.csv'
+                                    if config["enable"].get("custom_busmap", False) else [])
+        tech_costs = "../resources/costs.csv"
+
+    class output:
+        network = lambda w: '../networks/elec_s_' + w + '.nc'
+        regions_onshore = lambda w: '../resources/regions_onshore_elec_s_' + w + '.geojson'
+        regions_offshore = lambda w: '../resources/regions_offshore_elec_s_' + w + '.geojson'
+        busmap = lambda w: '../resources/busmap_elec_s_' + w + '.csv'
+        linemap = lambda w: '../resources/linemap_elec_s_' + w + '.csv'
 
 
 def normed(x): return (x/x.sum()).fillna(0.)
@@ -356,7 +379,7 @@ def clustering_for_n_clusters(n, n_clusters, custom_busmap=False, aggregate_carr
     return clustering
 
 
-def cluster_regions(busmaps, input=None, output=None):
+def cluster_regions(busmaps, input=None, output=None, output_suffix=str()):
 
     busmap = reduce(lambda x, y: x.map(y), busmaps[1:], busmaps[0])
 
@@ -366,7 +389,7 @@ def cluster_regions(busmaps, input=None, output=None):
         regions_c = regions.dissolve(busmap)
         regions_c.index.name = 'name'
         regions_c = regions_c.reset_index()
-        regions_c.to_file(getattr(output, which))
+        regions_c.to_file(getattr(output, which)(output_suffix))
 
 
 def plot_busmap_for_n_clusters(n, n_clusters, fn=None):
@@ -380,73 +403,71 @@ def plot_busmap_for_n_clusters(n, n_clusters, fn=None):
 
 
 if __name__ == "__main__":
-    if 'snakemake' not in globals():
-        from _helpers import mock_snakemake
-        snakemake = mock_snakemake('cluster_network', simpl='', clusters='5')
-    configure_logging(snakemake)
+    n = pypsa.Network(filepaths.input.network)
 
-    n = pypsa.Network(snakemake.input.network)
-
-    focus_weights = snakemake.config.get('focus_weights', None)
+    focus_weights = config.get('focus_weights', None)
 
     renewable_carriers = pd.Index([tech
                                    for tech in n.generators.carrier.unique()
-                                   if tech in snakemake.config['renewable']])
+                                   if tech in config['renewable']])
 
-    if snakemake.wildcards.clusters.endswith('m'):
-        n_clusters = int(snakemake.wildcards.clusters[:-1])
-        aggregate_carriers = snakemake.config["electricity"].get("conventional_carriers")
-    elif snakemake.wildcards.clusters == 'all':
-        n_clusters = len(n.buses)
-        aggregate_carriers = None # All
-    else:
-        n_clusters = int(snakemake.wildcards.clusters)
-        aggregate_carriers = None # All
+    for nclust in config['scenario']['clusters']:
+        if str(nclust).endswith('m'):
+            n_clusters = int(nclust[:-1])
+            aggregate_carriers = config["electricity"].get("conventional_carriers")
+        elif nclust == 'all':
+            n_clusters = len(n.buses)
+            aggregate_carriers = None  # All
+        else:
+            n_clusters = int(nclust)
+            aggregate_carriers = None  # All
 
-    if n_clusters == len(n.buses):
-        # Fast-path if no clustering is necessary
-        busmap = n.buses.index.to_series()
-        linemap = n.lines.index.to_series()
-        clustering = pypsa.networkclustering.Clustering(n, busmap, linemap, linemap, pd.Series(dtype='O'))
-    else:
-        line_length_factor = snakemake.config['lines']['length_factor']
-        Nyears = n.snapshot_weightings.objective.sum()/8760
+        if n_clusters == len(n.buses):
+            # Fast-path if no clustering is necessary
+            busmap = n.buses.index.to_series()
+            linemap = n.lines.index.to_series()
+            clustering = pypsa.networkclustering.Clustering(n, busmap, linemap, linemap, pd.Series(dtype='O'))
+        else:
+            line_length_factor = config['lines']['length_factor']
+            Nyears = n.snapshot_weightings.objective.sum()/8760
 
-        hvac_overhead_cost = (load_costs(snakemake.input.tech_costs, snakemake.config['costs'], snakemake.config['electricity'], Nyears)
-                              .at['HVAC overhead', 'capital_cost'])
+            hvac_overhead_cost = (load_costs(filepaths.input.tech_costs, config['costs'], config['electricity'], Nyears)
+                                  .at['HVAC overhead', 'capital_cost'])
 
-        def consense(x):
-            v = x.iat[0]
-            assert ((x == v).all() or x.isnull().all()), (
-                "The `potential` configuration option must agree for all renewable carriers, for now!"
-            )
-            return v
-        aggregation_strategies = snakemake.config["clustering"].get("aggregation_strategies", {})
-        # translate str entries of aggregation_strategies to pd.Series functions:
-        aggregation_strategies = {
-            p: {k: getattr(pd.Series, v) for k,v in aggregation_strategies[p].items()}
-            for p in aggregation_strategies.keys()
-        }
+            def consense(x):
+                v = x.iat[0]
+                assert ((x == v).all() or x.isnull().all()), (
+                    "The `potential` configuration option must agree for all renewable carriers, for now!"
+                )
+                return v
+            aggregation_strategies = config["clustering"].get("aggregation_strategies", {})
+            # translate str entries of aggregation_strategies to pd.Series functions:
+            aggregation_strategies = {
+                p: {k: getattr(pd.Series, v) for k,v in aggregation_strategies[p].items()}
+                for p in aggregation_strategies.keys()
+            }
 
-        custom_busmap = snakemake.config["enable"].get("custom_busmap", False)
-        if custom_busmap:
-            custom_busmap = pd.read_csv(snakemake.input.custom_busmap, index_col=0, squeeze=True)
-            custom_busmap.index = custom_busmap.index.astype(str)
-            logger.info(f"Imported custom busmap from {snakemake.input.custom_busmap}")
+            custom_busmap = config["enable"].get("custom_busmap", False)
+            if custom_busmap:
+                custom_busmap = pd.read_csv(filepaths.input.custom_busmap(n_clusters), index_col=0, squeeze=True)
+                custom_busmap.index = custom_busmap.index.astype(str)
+                logger.info(f"Imported custom busmap from {filepaths.input.custom_busmap(n_clusters)}")
 
-        cluster_config = snakemake.config.get('clustering', {}).get('cluster_network', {})
-        clustering = clustering_for_n_clusters(n, n_clusters, custom_busmap, aggregate_carriers,
-                                               line_length_factor, aggregation_strategies,
-                                               snakemake.config['solving']['solver']['name'],
-                                               cluster_config.get("algorithm", "hac"),
-                                               cluster_config.get("feature", "solar+onwind-time"),
-                                               hvac_overhead_cost, focus_weights)
+            cluster_config = config.get('clustering', {}).get('cluster_network', {})
+            clustering = clustering_for_n_clusters(n, n_clusters, custom_busmap, aggregate_carriers,
+                                                   line_length_factor, aggregation_strategies,
+                                                   config['solving']['solver']['name'],
+                                                   cluster_config.get("algorithm", "hac"),
+                                                   cluster_config.get("feature", "solar+onwind-time"),
+                                                   hvac_overhead_cost, focus_weights)
 
-    update_p_nom_max(clustering.network)
+        update_p_nom_max(clustering.network)
 
-    clustering.network.meta = dict(snakemake.config, **dict(wildcards=dict(snakemake.wildcards)))
-    clustering.network.export_to_netcdf(snakemake.output.network)
-    for attr in ('busmap', 'linemap'): #also available: linemap_positive, linemap_negative
-        getattr(clustering, attr).to_csv(snakemake.output[attr])
+        clustering.network.meta = config
+        clustering.network.export_to_netcdf(filepaths.output.network(str(nclust)))
 
-    cluster_regions((clustering.busmap,), snakemake.input, snakemake.output)
+        # also available: linemap_positive, linemap_negative
+        getattr(clustering, 'busmap').to_csv(filepaths.output.busmap(str(nclust)))
+        getattr(clustering, 'linemap').to_csv(filepaths.output.linemap(str(nclust)))
+
+        cluster_regions((clustering.busmap,), filepaths.input, filepaths.output, str(nclust))
