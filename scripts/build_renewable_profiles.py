@@ -179,6 +179,9 @@ node (`p_nom_max`): ``simple`` and ``conservative``:
   reached.
 
 """
+from _helpers import set_PROJdir
+set_PROJdir()
+
 import progressbar as pgb
 import geopandas as gpd
 import xarray as xr
@@ -226,6 +229,8 @@ if __name__ == '__main__':
     for technology in config['renewable']:
         if technology == 'hydro':
             continue
+
+        print('Building profile for ' + technology)
 
         tech_config = config['renewable'][technology]
         resource = tech_config['resource'] # pv panel config / wind turbine config

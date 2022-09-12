@@ -66,6 +66,8 @@ Description
 -----------
 
 """
+from _helpers import set_PROJdir
+set_PROJdir()
 
 import logging
 from _helpers import configure_logging

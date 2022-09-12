@@ -70,6 +70,8 @@ The configuration options ``electricity: powerplants_filter`` and ``electricity:
         custom_powerplants: YearCommissioned <= 2015
 
 """
+from _helpers import set_PROJdir
+set_PROJdir()
 
 import logging
 from _helpers import configure_logging

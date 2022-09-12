@@ -58,6 +58,8 @@ Description
 .. seealso::
     :mod:`build_renewable_profiles`
 """
+from _helpers import set_PROJdir
+set_PROJdir()
 
 import logging
 from _helpers import configure_logging

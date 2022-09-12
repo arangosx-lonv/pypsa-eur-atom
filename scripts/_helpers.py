@@ -282,3 +282,10 @@ def mock_snakemake(rulename, **wildcards):
 
     os.chdir(script_dir)
     return snakemake
+
+def set_PROJdir():
+    import os
+    import sys
+    if not os.environ.get("PROJ_LIB", False):
+        os.environ["PROJ_LIB"] = sys.prefix + "\\Library\\share\\proj"
+        print("No default PROJ data directory found, setting to " + os.environ["PROJ_LIB"])

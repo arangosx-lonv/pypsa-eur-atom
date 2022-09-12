@@ -82,6 +82,8 @@ It further adds extendable ``generators`` with **zero** capacity for
 - photovoltaic, onshore and AC- as well as DC-connected offshore wind installations with today's locational, hourly wind and solar capacity factors (but **no** current capacities),
 - additional open- and combined-cycle gas turbines (if ``OCGT`` and/or ``CCGT`` is listed in the config setting ``electricity: extendable_carriers``)
 """
+from _helpers import set_PROJdir
+set_PROJdir()
 
 import logging
 from _helpers import configure_logging, update_p_nom_max
