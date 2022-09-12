@@ -82,16 +82,18 @@ The rule :mod:`simplify_network` does three things:
 3. Stub lines and links, i.e. dead-ends of the network, are sequentially removed from the network in the function ``remove_stubs(...)``. Components are moved along.
 
 """
+from _helpers import set_PROJdir
+set_PROJdir()
 
 import logging
 from _helpers import configure_logging, update_p_nom_max, get_aggregation_strategies
 
 import yaml
 
-from cluster_network import clustering_for_n_clusters, cluster_regions
 from add_electricity import load_costs
 
 import pandas as pd
+import geopandas as gpd
 import numpy as np
 import scipy as sp
 from scipy.sparse.csgraph import connected_components, dijkstra
@@ -208,7 +210,6 @@ def _adjust_capital_costs_using_connection_costs(n, connection_costs_to_bus):
             connection_costs[tech] = costs
     pd.DataFrame(connection_costs).to_csv(filepaths.output.connection_costs)
             
-
 
 def _aggregate_and_move_components(n, busmap, connection_costs_to_bus, aggregation_strategies=dict(),
                                    aggregate_one_ports={"Load", "StorageUnit"}):
@@ -346,6 +347,18 @@ def remove_stubs(n, costs, aggregation_strategies=dict()):
 
     return n, busmap
 
+def simplified_regions(busmaps, input=None, output=None):
+
+    busmap = reduce(lambda x, y: x.map(y), busmaps[1:], busmaps[0])
+
+    for which in ('regions_onshore', 'regions_offshore'):
+        regions = gpd.read_file(getattr(input, which))
+        regions = regions.reindex(columns=["name", "geometry"]).set_index('name')
+        regions_c = regions.dissolve(busmap)
+        regions_c.index.name = 'name'
+        regions_c = regions_c.reset_index()
+        regions_c.to_file(getattr(output, which))
+
 
 if __name__ == "__main__":
 
@@ -383,4 +396,4 @@ if __name__ == "__main__":
     busmap_s = reduce(lambda x, y: x.map(y), busmaps[1:], busmaps[0])
     busmap_s.to_csv(filepaths.output.busmap)
 
-    cluster_regions(busmaps, filepaths.input, filepaths.output)
+    simplified_regions(busmaps, filepaths.input, filepaths.output)

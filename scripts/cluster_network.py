@@ -15,7 +15,7 @@ Relevant Settings
       cluster_network:
       aggregation_strategies:
 
-    focus_weights:
+    country_weights:
 
     solving:
         solver:
@@ -120,6 +120,8 @@ Exemplary unsolved network clustered to 37 nodes:
     :align: center
 
 """
+from _helpers import set_PROJdir
+set_PROJdir()
 
 import logging
 from _helpers import configure_logging, update_p_nom_max, get_aggregation_strategies
@@ -159,8 +161,10 @@ class filepaths:
         regions_onshore = "../resources/regions_onshore_elec_s.geojson"
         regions_offshore = "../resources/regions_offshore_elec_s.geojson"
         busmap = '../resources/busmap_elec_s.csv'
+        tso_busmap = ('../resources/tso_busmap.csv'
+                      if config["enable"].get("tso_busmap", False) else [])
         custom_busmap = lambda w: ('../data/custom_busmap_elec_s_' + w + '.csv'
-                                    if config["enable"].get("custom_busmap", False) else [])
+                                   if config["enable"].get("custom_busmap", False) else [])
         tech_costs = "../resources/costs.csv"
 
     class output:
@@ -175,7 +179,7 @@ def normed(x): return (x/x.sum()).fillna(0.)
 
 
 def weighting_for_country(n, x):
-    conv_carriers = {'OCGT','CCGT','PHS', 'hydro'}
+    conv_carriers = {'OCGT','CCGT','PHS','hydro'}
     gen = (n
            .generators.loc[n.generators.carrier.isin(conv_carriers)]
            .groupby('bus').p_nom.sum()
@@ -205,7 +209,7 @@ def get_feature_for_hac(n, buses_i=None, feature=None):
     carriers = feature.split('-')[0].split('+')
     if "offwind" in carriers:
         carriers.remove("offwind")
-        carriers = np.append(carriers, network.generators.carrier.filter(like='offwind').unique())
+        carriers = np.append(carriers, n.generators.carrier.filter(like='offwind').unique())
 
     if feature.split('-')[1] == 'cap':
         feature_data = pd.DataFrame(index=buses_i, columns=carriers)
@@ -230,33 +234,85 @@ def get_feature_for_hac(n, buses_i=None, feature=None):
     return feature_data
 
 
-def distribute_clusters(n, n_clusters, focus_weights=None, solver_name="cbc"):
-    """Determine the number of clusters per country"""
+def distribute_clusters(n, n_clusters, country_weights=None, tso_weights = None, solver_name="cbc"):
 
-    L = (n.loads_t.p_set.mean()
-         .groupby(n.loads.bus).sum()
-         .groupby([n.buses.country, n.buses.sub_network]).sum()
-         .pipe(normed))
+    assert not (country_weights is None and tso_weights is not None), "TSO weights provided but no country weights provided. TSO weights can only be used in combination with country weights. Check config file."
 
-    N = n.buses.groupby(['country', 'sub_network']).size()
+    if (country_weights is not None) and (tso_weights is None):
+        N = n.buses.groupby(['country', 'sub_network']).size()
 
-    assert n_clusters >= len(N) and n_clusters <= N.sum(), \
-        f"Number of clusters must be {len(N)} <= n_clusters <= {N.sum()} for this selection of countries."
+        assert n_clusters >= len(N) and n_clusters <= N.sum(), \
+            f"Number of clusters must be {len(N)} <= n_clusters <= {N.sum()} for this selection of countries."
 
-    if focus_weights is not None:
+        L = (n.loads_t.p_set.mean()
+             .groupby(n.loads.bus).sum()
+             .groupby([n.buses.country, n.buses.sub_network]).sum()
+             .pipe(normed))
 
-        total_focus = sum(list(focus_weights.values()))
+        total_country = sum(list(country_weights.values()))
 
-        assert total_focus <= 1.0, "The sum of focus weights must be less than or equal to 1."
+        assert total_country <= 1.0, "The sum of focus weights must be less than or equal to 1."
 
-        for country, weight in focus_weights.items():
-            L[country] = weight / len(L[country])
+        for country, weight in country_weights.items():
+            L[country] = weight * L[country].transform(lambda x: normed(x))
 
-        remainder = [c not in focus_weights.keys() for c in L.index.get_level_values('country')]
-        L[remainder] = L.loc[remainder].pipe(normed) * (1 - total_focus)
+        remainder = [c not in country_weights.keys() for c in L.index.get_level_values('country')]
+        L[remainder] = L.loc[remainder].pipe(normed) * (1 - total_country)
 
-        logger.warning('Using custom focus weights for determining number of clusters.')
+        logger.warning('Using custom country weights for determining number of clusters.'
+                       'Nodes distributed across sub-networks within countries according to relative load.')
 
+    elif (country_weights is not None) and (tso_weights is not None):
+        tso_busmap = pd.read_csv(filepaths.input.tso_busmap).set_index('Bus').squeeze()
+        tso_busmap.index = tso_busmap.index.astype(str)
+
+        n.buses = n.buses.merge(tso_busmap, left_index=True, right_index=True)
+
+        N = n.buses.groupby(['country', 'tso']).size()
+
+        assert n_clusters >= len(N) and n_clusters <= N.sum(), \
+            f"Number of clusters must be {len(N)} <= n_clusters <= {N.sum()} for this selection of countries and TSOs."
+
+        L = (n.loads_t.p_set.mean()
+             .groupby(n.loads.bus).sum()
+             .groupby([n.buses.country, n.buses.tso]).sum()
+             .pipe(normed))
+
+        total_country = sum(list(country_weights.values()))
+        assert total_country <= 1.0, "The sum of country weights must be less than or equal to 1."
+
+        for country in tso_weights:
+            total_tso = sum(list(tso_weights[country].values()))
+            assert total_tso <= 1.0, ("The sum of TSO weights for " + country + " must be less than or equal to 1.")
+
+        for country, c_weight in country_weights.items():
+            if tso_weights.get(country, False):
+                total_tso = sum(list(tso_weights[country].values()))
+
+                for tso, t_weight in tso_weights[country].items():
+                    L[country, tso] = t_weight * c_weight
+
+                remainder = [t not in tso_weights[country].keys() for t in L[country].index.get_level_values('tso')]
+                L[country][remainder] = L[country].loc[remainder].pipe(normed) * (1 - total_tso)
+            else:
+                L[country] = c_weight * L[country].transform(lambda x: normed(x))
+
+        remainder = [c not in country_weights.keys() for c in L.index.get_level_values('country')]
+        L[remainder] = L.loc[remainder].pipe(normed) * (1 - total_country)
+
+        logger.warning('Using custom country weights and TSO weights for determining distribution of clusters.')
+
+    else:
+        N = n.buses.groupby(['country', 'sub_network']).size()
+
+        assert n_clusters >= len(N) and n_clusters <= N.sum(), \
+            f"Number of clusters must be {len(N)} <= n_clusters <= {N.sum()} for this selection of countries."
+
+        L = (n.loads_t.p_set.mean()
+             .groupby(n.loads.bus).sum()
+             .groupby([n.buses.country, n.buses.sub_network]).sum()
+             .pipe(normed))
+    print(L)
     assert np.isclose(L.sum(), 1.0, rtol=1e-3), f"Country weights L must sum up to 1.0 when distributing clusters. Is {L.sum()}."
 
     m = po.ConcreteModel()
@@ -278,7 +334,8 @@ def distribute_clusters(n, n_clusters, focus_weights=None, solver_name="cbc"):
     return pd.Series(m.n.get_values(), index=L.index).round().astype(int)
 
 
-def busmap_for_n_clusters(n, n_clusters, solver_name, focus_weights=None, algorithm="kmeans", feature=None, **algorithm_kwds):
+def busmap_for_n_clusters(n, n_clusters, solver_name, country_weights=None, tso_weights = None,
+                          algorithm="kmeans", feature=None, **algorithm_kwds):
     if algorithm == "kmeans":
         algorithm_kwds.setdefault('n_init', 1000)
         algorithm_kwds.setdefault('max_iter', 30000)
@@ -290,7 +347,7 @@ def busmap_for_n_clusters(n, n_clusters, solver_name, focus_weights=None, algori
 
         # overwrite country of nodes that are disconnected from their country-topology
         for country in n.buses.country.unique():
-            m = n[n.buses.country ==country].copy()
+            m = n[n.buses.country == country].copy()
 
             _, labels = csgraph.connected_components(m.adjacency_matrix(), directed=False)
 
@@ -324,7 +381,8 @@ def busmap_for_n_clusters(n, n_clusters, solver_name, focus_weights=None, algori
 
     n.determine_network_topology()
 
-    n_clusters = distribute_clusters(n, n_clusters, focus_weights=focus_weights, solver_name=solver_name)
+    cluster_distribution = distribute_clusters(n, n_clusters, country_weights = country_weights,
+                                               tso_weights = tso_weights, solver_name=solver_name)
 
     def busmap_for_country(x):
         prefix = x.name[0] + x.name[1] + ' '
@@ -334,26 +392,32 @@ def busmap_for_n_clusters(n, n_clusters, solver_name, focus_weights=None, algori
         weight = weighting_for_country(n, x)
 
         if algorithm == "kmeans":
-            return prefix + busmap_by_kmeans(n, weight, n_clusters[x.name], buses_i=x.index, **algorithm_kwds)
+            return prefix + busmap_by_kmeans(n, weight, cluster_distribution[x.name], buses_i=x.index, **algorithm_kwds)
         elif algorithm == "hac":
-            return prefix + busmap_by_hac(n, n_clusters[x.name], buses_i=x.index, feature=feature.loc[x.index])
+            return prefix + busmap_by_hac(n, cluster_distribution[x.name], buses_i=x.index, feature=feature.loc[x.index])
         elif algorithm == "modularity":
-            return prefix + busmap_by_greedy_modularity(n, n_clusters[x.name], buses_i=x.index)
+            return prefix + busmap_by_greedy_modularity(n, cluster_distribution[x.name], buses_i=x.index)
         else:
-            raise ValueError(f"`algorithm` must be one of 'kmeans' or 'hac'. Is {algorithm}.")
+            raise ValueError(f"`algorithm` must be one of 'kmeans', 'hac', or 'modularity'. Is {algorithm}.")
 
-    return (n.buses.groupby(['country', 'sub_network'], group_keys=False)
+    if tso_weights is not None:
+        result = (n.buses.groupby(['country', 'tso'], group_keys=False)
             .apply(busmap_for_country).squeeze().rename('busmap'))
+    else:
+        result = (n.buses.groupby(['country', 'sub_network'], group_keys=False)
+            .apply(busmap_for_country).squeeze().rename('busmap'))
+    return result
 
 
 def clustering_for_n_clusters(n, n_clusters, custom_busmap=False, aggregate_carriers=None,
                               line_length_factor=1.25, aggregation_strategies=dict(), solver_name="cbc",
-                              algorithm="hac", feature=None, extended_link_costs=0, focus_weights=None):
+                              algorithm="hac", feature=None, extended_link_costs=0,
+                              country_weights=None, tso_weights = None):
 
     bus_strategies, generator_strategies = get_aggregation_strategies(aggregation_strategies)
 
     if not isinstance(custom_busmap, pd.Series):
-        busmap = busmap_for_n_clusters(n, n_clusters, solver_name, focus_weights, algorithm, feature)
+        busmap = busmap_for_n_clusters(n, n_clusters, solver_name, country_weights, tso_weights, algorithm, feature)
     else:
         busmap = custom_busmap
 
@@ -405,7 +469,8 @@ def plot_busmap_for_n_clusters(n, n_clusters, fn=None):
 if __name__ == "__main__":
     n = pypsa.Network(filepaths.input.network)
 
-    focus_weights = config.get('focus_weights', None)
+    country_weights = config.get('country_weights', None)
+    tso_weights = config.get('tso_weights', None)
 
     renewable_carriers = pd.Index([tech
                                    for tech in n.generators.carrier.unique()
@@ -459,7 +524,7 @@ if __name__ == "__main__":
                                                    config['solving']['solver']['name'],
                                                    cluster_config.get("algorithm", "hac"),
                                                    cluster_config.get("feature", "solar+onwind-time"),
-                                                   hvac_overhead_cost, focus_weights)
+                                                   hvac_overhead_cost, country_weights, tso_weights)
 
         update_p_nom_max(clustering.network)
 
