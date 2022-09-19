@@ -195,8 +195,6 @@ import time
 from dask.distributed import Client, LocalCluster
 import yaml
 
-from _helpers import configure_logging
-
 logger = logging.getLogger(__name__)
 
 # Snakemake parameters replicated here
@@ -205,19 +203,19 @@ with open('../config.yaml') as f:
 
 class filepaths:
     class input:
-        base_network = '../networks/base.nc'
-        corine = '../data/bundle/corine/g250_clc06_V18_5.tif'
-        natura = '../resources/natura.tiff'
-        gebco = '../data/bundle/gebco/gebco_2022_n75.0_s30.0_w-20.0_e40.0.nc'
-        ship_density = '../resources/shipdensity_raster.nc'
-        country_shapes = '../resources/country_shapes.geojson'
-        offshore_shapes = '../resources/offshore_shapes.geojson'
-        regions = lambda w: ('../resources/regions_onshore.geojson'
+        base_network = '../models/' + config['project_folder'] + '/networks/base.nc'
+        corine = '../data/corine_land_use/g250_clc06_V18_5.tif'
+        natura = '../data/natura.tiff'
+        gebco = '../data/bathymetry/gebco_2022_n75.0_s30.0_w-20.0_e40.0.nc'
+        ship_density = '../data/shipdensity_raster.nc'
+        country_shapes = '../models/' + config['project_folder'] + '/intermediate_files/country_shapes.geojson'
+        offshore_shapes = '../models/' + config['project_folder'] + '/intermediate_files/offshore_shapes.geojson'
+        regions = lambda w: ('../models/' + config['project_folder'] + '/intermediate_files/regions_onshore.geojson'
                              if w in ('onwind' 'solar')
-                             else '../resources/regions_offshore.geojson')
-        cutout = lambda w: '../cutouts/' + config['renewable'][w]['cutout'] + '.nc'
+                             else '../models/' + config['project_folder'] + '/intermediate_files/regions_offshore.geojson')
+        cutout = lambda w: '../data/cutouts/' + config['renewable'][w]['cutout'] + '.nc'
 
-    output = lambda w: '../resources/profile_' + w + '.nc'
+    output = lambda w: '../models/' + config['project_folder'] + '/intermediate_files/profile_' + w + '.nc'
 
 
 if __name__ == '__main__':

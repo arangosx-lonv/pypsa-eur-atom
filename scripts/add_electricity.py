@@ -82,12 +82,10 @@ It further adds extendable ``generators`` with **zero** capacity for
 - photovoltaic, onshore and AC- as well as DC-connected offshore wind installations with today's locational, hourly wind and solar capacity factors (but **no** current capacities),
 - additional open- and combined-cycle gas turbines (if ``OCGT`` and/or ``CCGT`` is listed in the config setting ``electricity: extendable_carriers``)
 """
-from _helpers import set_PROJdir
+from _helpers import set_PROJdir, update_p_nom_max
 set_PROJdir()
 
 import logging
-from _helpers import configure_logging, update_p_nom_max
-
 import yaml
 import pypsa
 import pandas as pd
@@ -102,27 +100,26 @@ idx = pd.IndexSlice
 
 logger = logging.getLogger(__name__)
 
-
 with open('../config.yaml') as f:
     config = yaml.safe_load(f)
 
 class filepaths:
     class input:
-        base_network = '../networks/base.nc'
-        tech_costs = "../resources/costs.csv"
-        regions = "../resources/regions_onshore.geojson"
-        powerplants = '../resources/powerplants.csv'
-        hydro_capacities = '../data/bundle/hydro_capacities.csv'
+        base_network = '../models/' + config['project_folder'] + '/networks/base.nc'
+        tech_costs = "../data/costs.csv"
+        regions = '../models/' + config['project_folder'] + '/intermediate_files/regions_onshore.geojson'
+        powerplants = '../models/' + config['project_folder'] + '/intermediate_files/powerplants.csv'
+        hydro_capacities = '../data/hydro_capacities.csv'
         geth_hydro_capacities = '../data/geth2015_hydro_capacities.csv'
-        load = '../resources/load.csv'
-        nuts3_shapes = '../resources/nuts3_shapes.geojson'
-        profile = lambda w: '../resources/profile_' + w + '.nc'
+        load = '../data/load.csv'
+        nuts3_shapes = '../models/' + config['project_folder'] + '/intermediate_files/nuts3_shapes.geojson'
+        profile = lambda w: '../models/' + config['project_folder'] + '/intermediate_files/profile_' + w + '.nc'
         # Attributes excluded for now, as conventional generators not currently included
         # attributes = {f"conventional_{tech}_{attr}": config['conventional'][tech][attr]
         #               for tech in config['conventional']
         #               for attr in config['conventional'].get(tech, {})}
 
-    output = "../networks/elec.nc"
+    output = '../models/' + config['project_folder'] + '/networks/elec.nc'
 
 
 def normed(s): return s/s.sum()
@@ -223,7 +220,7 @@ def attach_load(n, regions, load, nuts3_shapes, countries, scaling=1.):
     opsd_load = (pd.read_csv(load, index_col=0, parse_dates=True)
                 .filter(items=countries))
 
-    logger.info(f"Load data scaled with scalling factor {scaling}.")
+    logger.info(f"Load data scaled with scaling factor {scaling}.")
     opsd_load *= scaling
 
     nuts3 = gpd.read_file(nuts3_shapes).set_index('index')
@@ -509,7 +506,6 @@ def attach_extendable_generators(n, costs, ppl, carriers):
                                       "Only OCGT, CCGT and nuclear are allowed at the moment.")
 
 
-
 def attach_OPSD_renewables(n, tech_map):
 
     tech_string = ", ".join(sum(tech_map.values(), []))
@@ -583,6 +579,7 @@ def add_nice_carrier_names(n, config):
         logger.warning(f'tech_colors for carriers {missing_i} not defined in config.')
     n.carriers['color'] = colors
 
+
 if __name__ == "__main__":
 
     n = pypsa.Network(filepaths.input.base_network)
@@ -644,7 +641,6 @@ if __name__ == "__main__":
                        "Falling back to whether `renewable_capacities_from_opsd` is non-empty.")
         from_opsd = bool(config["electricity"].get("renewable_capacities_from_opsd", False))
         estimate_renewable_caps['from_opsd'] = from_opsd
-    
 
     if estimate_renewable_caps["enable"]:        
         if estimate_renewable_caps["from_opsd"]:

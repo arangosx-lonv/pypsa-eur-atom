@@ -70,18 +70,15 @@ from _helpers import set_PROJdir
 set_PROJdir()
 
 import logging
-from _helpers import configure_logging
-
 import yaml
 import numpy as np
 from operator import attrgetter
 from functools import reduce
-from itertools import takewhile
-
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import MultiPolygon, Polygon
 from shapely.ops import unary_union
+from shapely.validation import make_valid
 import pycountry as pyc
 
 logger = logging.getLogger(__name__)
@@ -92,20 +89,19 @@ with open('../config.yaml') as f:
 
 class filepaths:
     class input:
-        naturalearth = '../data/bundle/naturalearth/ne_10m_admin_0_countries.shp'
-        nuts3 = '../data/bundle/NUTS_2013_60M_SH/data/NUTS_RG_60M_2013.shp'
-        #nuts3 = 'data/euroglobalmap/NUTS_3_clean.shp' # Open-source version - DATA REFINEMENT STILL IN PROGRESS
-        nuts3pop = '../data/bundle/nama_10r_3popgdp.tsv.gz'
-        nuts3gdp = '../data/bundle/nama_10r_3gdp.tsv.gz'
-        ch_cantons = '../data/bundle/ch_cantons.csv'
-        ch_popgdp = '../data/bundle/je-e-21.03.02.xls'
-        eez = '../data/bundle/eez/World_EEZ_v8_2014.shp'
+        naturalearth = '../data/borders_national/ne_10m_admin_0_countries.shp'
+        nuts3 = '../data/borders_nuts3/NUTS_3_2021_with_UK.shp'
+        nuts3pop = '../data/downscaling/nama_10r_3popgdp_2021.tsv.gz'
+        nuts3gdp = '../data/downscaling/nama_10r_3gdp_2021.tsv.gz'
+        ukpop = '../data/downscaling/uk_regional_population_2021H1.csv'
+        ukgdp = '../data/downscaling/uk_regional_gdp_2020.csv'
+        eez = '../data/eez/eez_v11.shp'
 
     class output:
-        country_shapes = '../resources/country_shapes.geojson'
-        nuts3_shapes = '../resources/nuts3_shapes.geojson'
-        offshore_shapes = '../resources/offshore_shapes.geojson'
-        europe_shape = '../resources/europe_shape.geojson'
+        country_shapes = '../models/' + config['project_folder'] + '/intermediate_files/country_shapes.geojson'
+        nuts3_shapes = '../models/' + config['project_folder'] + '/intermediate_files/nuts3_shapes.geojson'
+        offshore_shapes = '../models/' + config['project_folder'] + '/intermediate_files/offshore_shapes.geojson'
+        europe_shape = '../models/' + config['project_folder'] + '/intermediate_files/europe_shape.geojson'
 
 def _get_country(target, **keys):
     assert len(keys) == 1
@@ -113,20 +109,6 @@ def _get_country(target, **keys):
         return getattr(pyc.countries.get(**keys), target)
     except (KeyError, AttributeError):
         return np.nan
-
-
-def _simplify_polys(polys, minarea=0.1, tolerance=0.01, filterremote=True):
-    if isinstance(polys, MultiPolygon):
-        polys = sorted(polys.geoms, key=attrgetter('area'), reverse=True)
-        mainpoly = polys[0]
-        mainlength = np.sqrt(mainpoly.area/(2.*np.pi))
-        if mainpoly.area > minarea:
-            polys = MultiPolygon([p
-                                  for p in takewhile(lambda p: p.area > minarea, polys)
-                                  if not filterremote or (mainpoly.distance(p) < mainlength)])
-        else:
-            polys = mainpoly
-    return polys.simplify(tolerance=tolerance)
 
 
 def countries(naturalearth, country_list):
@@ -139,7 +121,8 @@ def countries(naturalearth, country_list):
     df['name'] = reduce(lambda x,y: x.fillna(y), fieldnames, next(fieldnames)).str[0:2]
 
     df = df.loc[df.name.isin(country_list) & ((df['scalerank'] == 0) | (df['scalerank'] == 5))]
-    s = df.set_index('name')['geometry'].map(_simplify_polys)
+    s = df.set_index('name')['geometry'].map(lambda q: q.simplify(tolerance = 0.01))
+    # s = df.set_index('name')['geometry']
     if 'RS' in country_list: s['RS'] = s['RS'].union(s.pop('KV'))
 
     return s
@@ -147,11 +130,14 @@ def countries(naturalearth, country_list):
 
 def eez(country_shapes, eez, country_list):
     df = gpd.read_file(eez)
-    df = df.loc[df['ISO_3digit'].isin([_get_country('alpha_3', alpha_2=c) for c in country_list])]
-    df['name'] = df['ISO_3digit'].map(lambda c: _get_country('alpha_2', alpha_3=c))
-    s = df.set_index('name').geometry.map(lambda s: _simplify_polys(s, filterremote=False))
+    df = df.query('POL_TYPE == "200NM"') # Remove disputed areas as well as joint regimes
+    df = df.loc[df['ISO_TER1'].isin([_get_country('alpha_3', alpha_2=c) for c in country_list])]
+    df['name'] = df['ISO_TER1'].map(lambda c: _get_country('alpha_2', alpha_3=c))
+    s = df.set_index('name').geometry.map(lambda s: s.simplify(tolerance = 0.01))
+    # s = df.set_index('name').geometry
     s = gpd.GeoSeries({k:v for k,v in s.iteritems() if v.distance(country_shapes[k]) < 1e-3})
     s = s.to_frame("geometry")
+    s.geometry = s.apply(lambda row: make_valid(row.geometry) if not row.geometry.is_valid else row.geometry, axis=1)
     s.index.name = "name"
     return s
 
@@ -167,67 +153,68 @@ def country_cover(country_shapes, eez_shapes=None):
     return Polygon(shell=europe_shape.exterior)
 
 
-def nuts3(country_shapes, nuts3, nuts3pop, nuts3gdp, ch_cantons, ch_popgdp):
+def nuts3(country_shapes, nuts3, nuts3pop, nuts3gdp, ukpop, ukgdp):
     df = gpd.read_file(nuts3)
-    if nuts3 == '../data/euroglobalmap/NUTS_3_clean.shp':
-        print("Using updated NUTS-3 shapefile")
-        df['geometry'] = df['geometry'].map(_simplify_polys)
-        df = df.rename(columns={'NUTS_CODE': 'id'})[['id', 'geometry']].set_index('id')
-    else:
-        print("Using original NUTS-3 shapefile")
-        df = df.loc[df['STAT_LEVL_'] == 3]
-        df['geometry'] = df['geometry'].map(_simplify_polys)
-        df = df.rename(columns={'NUTS_ID': 'id'})[['id', 'geometry']].set_index('id')
+
+    # Implementing this reduces detail slightly, but reduces nuts file size by >95%
+    df.geometry = df.geometry.map(lambda s: s.simplify(tolerance = 0.01))
+    # Simplification can cause some geometries to become invalid - re-fix here to be sure
+    df.geometry = df.apply(lambda row: make_valid(row.geometry) if not row.geometry.is_valid else row.geometry, axis=1)
+
+    df = df.rename(columns={'NUTS3': 'id'})[['id', 'geometry']].set_index('id')
 
     pop = pd.read_table(nuts3pop, na_values=[':'], delimiter=' ?\t', engine='python')
     pop = (pop
-           .set_index(pd.MultiIndex.from_tuples(pop.pop('unit,geo\\time').str.split(','))).loc['THS']
+           .set_index(pd.MultiIndex.from_tuples(pop.pop('freq,unit,geo\\TIME_PERIOD').str.split(','))).loc['A', 'THS']
            .applymap(lambda x: pd.to_numeric(x, errors='coerce'))
-           .fillna(method='bfill', axis=1))['2014']
+           .fillna(method='ffill', axis=1))['2020']
 
     gdp = pd.read_table(nuts3gdp, na_values=[':'], delimiter=' ?\t', engine='python')
     gdp = (gdp
-           .set_index(pd.MultiIndex.from_tuples(gdp.pop('unit,geo\\time').str.split(','))).loc['EUR_HAB']
+           .set_index(pd.MultiIndex.from_tuples(gdp.pop('freq,unit,geo\\TIME_PERIOD').str.split(','))).loc[
+               'A', 'MIO_EUR']
            .applymap(lambda x: pd.to_numeric(x, errors='coerce'))
-           .fillna(method='bfill', axis=1))['2014']
+           .fillna(method='ffill', axis=1))['2020']
 
-    cantons = pd.read_csv(ch_cantons)
-    cantons = cantons.set_index(cantons['HASC'].str[3:])['NUTS']
-    cantons = cantons.str.pad(5, side='right', fillchar='0')
+    uk_pop = pd.read_csv(ukpop).set_index('Code')
+    uk_pop = uk_pop['All ages'].squeeze()
 
-    swiss = pd.read_excel(ch_popgdp, skiprows=3, index_col=0)
-    swiss.columns = swiss.columns.to_series().map(cantons)
+    uk_gdp = pd.read_csv(ukgdp).set_index('LA code')
+    uk_gdp = uk_gdp['2020'].squeeze()
 
-    swiss_pop = pd.to_numeric(swiss.loc['Residents in 1000', 'CH040':])
-    pop = pd.concat([pop, swiss_pop])
-    swiss_gdp = pd.to_numeric(swiss.loc['Gross domestic product per capita in Swiss francs', 'CH040':])
-    gdp = pd.concat([gdp, swiss_gdp])
+    pop = pd.concat([pop, uk_pop])
+    gdp = pd.concat([gdp, uk_gdp])
 
     df = df.join(pd.DataFrame(dict(pop=pop, gdp=gdp)))
 
-    df['country'] = df.index.to_series().str[:2].replace(dict(UK='GB', EL='GR'))
+    # UK local authority district ID value identify the country, then lead with a zero (E/W/N) or one (Scotland)
+    df['country'] = df.index.to_series().str[:2].replace(dict(E0='GB', N0='GB', S1='GB', W0='GB', EL='GR'))
 
-    excludenuts = pd.Index(('FRA10', 'FRA20', 'FRA30', 'FRA40', 'FRA50',
-                            'PT200', 'PT300',
-                            'ES707', 'ES703', 'ES704','ES705', 'ES706', 'ES708', 'ES709',
-                            'FI2', 'FR9'))
-    excludecountry = pd.Index(('MT', 'TR', 'LI', 'IS', 'CY', 'KV'))
+    excludenuts = pd.Index(('FRY10', 'FRY20', 'FRY30', 'FRY40', 'FRY50',  # French overseas territories
+                            'PT200', 'PT300',  # Azores and Madeira
+                            'ES703', 'ES704', 'ES705', 'ES706', 'ES707', 'ES708', 'ES709',  # Canary Islands
+                            'ELZZZ',  # Mount Athos autonomous monastic community
+                            'NO0B1', 'NO0B2'))  # Svalbard and Jan Mayen
+    # Serbia (RS) actually has some regional information in Eurostat, but it's incomplete so not using it here.
+    excludecountry = pd.Index(('MT', 'TR', 'LI', 'IS', 'CY', 'KV', 'AD', 'SM', 'VA', 'MC', 'RS'))
 
     df = df.loc[df.index.difference(excludenuts)]
     df = df.loc[~df.country.isin(excludecountry)]
 
+    df = df.loc[df.index.difference(excludenuts)]
+    df = df.loc[~df.country.isin(excludecountry)]
+
+    # Add country-level values for Bosnia and Herzegovina, Serbia
     manual = gpd.GeoDataFrame(
-        [['BA1', 'BA', 3871.],
-         ['RS1', 'RS', 7210.],
-         ['AL1', 'AL', 2893.]],
+        [['BA000', 'BA', 3263.], # https://data.worldbank.org/indicator/SP.POP.TOTL?locations=BA
+         ['ME000', 'ME', 620.], # https://data.worldbank.org/indicator/SP.POP.TOTL?locations=ME
+         ['RS000', 'RS', 6844.]], # https://data.worldbank.org/indicator/SP.POP.TOTL?locations=RS
         columns=['NUTS_ID', 'country', 'pop']
     ).set_index('NUTS_ID')
     manual['geometry'] = manual['country'].map(country_shapes)
     manual = manual.dropna()
 
     df = pd.concat([df, manual], sort=False)
-
-    df.loc['ME000', 'pop'] = 650.
 
     return df
 
@@ -243,5 +230,5 @@ if __name__ == "__main__":
     europe_shape.reset_index().to_file(filepaths.output.europe_shape)
 
     nuts3_shapes = nuts3(country_shapes, filepaths.input.nuts3, filepaths.input.nuts3pop,
-                         filepaths.input.nuts3gdp, filepaths.input.ch_cantons, filepaths.input.ch_popgdp)
+                         filepaths.input.nuts3gdp, filepaths.input.ukpop, filepaths.input.ukgdp)
     nuts3_shapes.reset_index().to_file(filepaths.output.nuts3_shapes)

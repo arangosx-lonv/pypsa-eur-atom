@@ -120,31 +120,23 @@ Exemplary unsolved network clustered to 37 nodes:
     :align: center
 
 """
-from _helpers import set_PROJdir
+from _helpers import set_PROJdir, update_p_nom_max, get_aggregation_strategies
 set_PROJdir()
 
 import logging
-from _helpers import configure_logging, update_p_nom_max, get_aggregation_strategies
-
 import yaml
-
 import pypsa
-
 import pandas as pd
 import numpy as np
 import geopandas as gpd
 import pyomo.environ as po
 import matplotlib.pyplot as plt
 import seaborn as sns
-
 from functools import reduce
-
 from pypsa.networkclustering import (busmap_by_kmeans, busmap_by_hac,
                                      busmap_by_greedy_modularity, get_clustering_from_busmap)
-
 import warnings
 warnings.filterwarnings(action='ignore', category=UserWarning)
-
 from add_electricity import load_costs
 
 idx = pd.IndexSlice
@@ -157,22 +149,22 @@ with open('../config.yaml') as f:
 
 class filepaths:
     class input:
-        network = '../networks/elec_s.nc'
-        regions_onshore = "../resources/regions_onshore_elec_s.geojson"
-        regions_offshore = "../resources/regions_offshore_elec_s.geojson"
-        busmap = '../resources/busmap_elec_s.csv'
-        tso_busmap = ('../resources/tso_busmap.csv'
+        network = '../models/' + config['project_folder'] + '/networks/elec_s.nc'
+        regions_onshore = '../models/' + config['project_folder'] + '/intermediate_files/regions_onshore_elec_s.geojson'
+        regions_offshore = '../models/' + config['project_folder'] + '/intermediate_files/regions_offshore_elec_s.geojson'
+        busmap = '../models/' + config['project_folder'] + '/intermediate_files/busmap_elec_s.csv'
+        tso_busmap = ('../models/' + config['project_folder'] + '/intermediate_files/tso_busmap.csv'
                       if config["enable"].get("tso_busmap", False) else [])
-        custom_busmap = lambda w: ('../data/custom_busmap_elec_s_' + w + '.csv'
+        custom_busmap = lambda w: ('../models/' + config['project_folder'] + '/intermediate_files/custom_busmap_elec_s_' + w + '.csv'
                                    if config["enable"].get("custom_busmap", False) else [])
-        tech_costs = "../resources/costs.csv"
+        tech_costs = "../data/costs.csv"
 
     class output:
-        network = lambda w: '../networks/elec_s_' + w + '.nc'
-        regions_onshore = lambda w: '../resources/regions_onshore_elec_s_' + w + '.geojson'
-        regions_offshore = lambda w: '../resources/regions_offshore_elec_s_' + w + '.geojson'
-        busmap = lambda w: '../resources/busmap_elec_s_' + w + '.csv'
-        linemap = lambda w: '../resources/linemap_elec_s_' + w + '.csv'
+        network = lambda w: '../models/' + config['project_folder'] + '/networks/elec_s_' + w + '.nc'
+        regions_onshore = lambda w: '../models/' + config['project_folder'] + '/intermediate_files/regions_onshore_elec_s_' + w + '.geojson'
+        regions_offshore = lambda w: '../models/' + config['project_folder'] + '/intermediate_files/regions_offshore_elec_s_' + w + '.geojson'
+        busmap = lambda w: '../models/' + config['project_folder'] + '/intermediate_files/busmap_elec_s_' + w + '.csv'
+        linemap = lambda w: '../models/' + config['project_folder'] + '/intermediate_files/linemap_elec_s_' + w + '.csv'
 
 
 def normed(x): return (x/x.sum()).fillna(0.)
@@ -312,7 +304,7 @@ def distribute_clusters(n, n_clusters, country_weights=None, tso_weights = None,
              .groupby(n.loads.bus).sum()
              .groupby([n.buses.country, n.buses.sub_network]).sum()
              .pipe(normed))
-    print(L)
+
     assert np.isclose(L.sum(), 1.0, rtol=1e-3), f"Country weights L must sum up to 1.0 when distributing clusters. Is {L.sum()}."
 
     m = po.ConcreteModel()
@@ -330,6 +322,9 @@ def distribute_clusters(n, n_clusters, country_weights=None, tso_weights = None,
 
     results = opt.solve(m)
     assert results['Solver'][0]['Status'] == 'ok', f"Solver returned non-optimally: {results}"
+
+    print("Final node cluster distribution:")
+    print(pd.Series(m.n.get_values(), index=L.index).round().astype(int))
 
     return pd.Series(m.n.get_values(), index=L.index).round().astype(int)
 
@@ -468,6 +463,7 @@ def plot_busmap_for_n_clusters(n, n_clusters, fn=None):
 
 if __name__ == "__main__":
     n = pypsa.Network(filepaths.input.network)
+    n.buses['carrier'] = 'AC'
 
     country_weights = config.get('country_weights', None)
     tso_weights = config.get('tso_weights', None)
@@ -476,7 +472,7 @@ if __name__ == "__main__":
                                    for tech in n.generators.carrier.unique()
                                    if tech in config['renewable']])
 
-    for nclust in config['scenario']['clusters']:
+    for nclust in config['clusters']:
         if str(nclust).endswith('m'):
             n_clusters = int(nclust[:-1])
             aggregate_carriers = config["electricity"].get("conventional_carriers")

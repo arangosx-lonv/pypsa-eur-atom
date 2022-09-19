@@ -65,19 +65,15 @@ from _helpers import set_PROJdir
 set_PROJdir()
 
 import logging
-from _helpers import configure_logging
-
 import pypsa
 import yaml
 import pandas as pd
 import geopandas as gpd
 import numpy as np
 import networkx as nx
-
 from scipy import spatial
 from scipy.sparse import csgraph
 from itertools import product
-
 from shapely.geometry import Point, LineString
 import shapely, shapely.prepared, shapely.wkt
 
@@ -89,19 +85,19 @@ with open('../config.yaml') as f:
 
 class filepaths:
     class input:
-        eg_buses = '../data/entsoegridkit/buses.csv'
-        eg_lines = '../data/entsoegridkit/lines.csv'
-        eg_links = '../data/entsoegridkit/links.csv'
-        eg_converters = '../data/entsoegridkit/converters.csv'
-        eg_transformers = '../data/entsoegridkit/transformers.csv'
+        eg_buses = '../data/entsoe_grid/buses.csv'
+        eg_lines = '../data/entsoe_grid/lines.csv'
+        eg_links = '../data/entsoe_grid/links.csv'
+        eg_converters = '../data/entsoe_grid/converters.csv'
+        eg_transformers = '../data/entsoe_grid/transformers.csv'
         parameter_corrections = '../data/parameter_corrections.yaml'
         links_p_nom = '../data/links_p_nom.csv'
         links_tyndp = '../data/links_tyndp.csv'
-        country_shapes = '../resources/country_shapes.geojson'
-        offshore_shapes = '../resources/offshore_shapes.geojson'
-        europe_shape = '../resources/europe_shape.geojson'
+        country_shapes = '../models/' + config['project_folder'] + '/intermediate_files/country_shapes.geojson'
+        offshore_shapes = '../models/' + config['project_folder'] + '/intermediate_files/offshore_shapes.geojson'
+        europe_shape = '../models/' + config['project_folder'] + '/intermediate_files/europe_shape.geojson'
 
-    output = '../networks/base.nc'
+    output = '../models/' + config['project_folder'] + '/networks/base.nc'
 
 
 def _get_oid(df):

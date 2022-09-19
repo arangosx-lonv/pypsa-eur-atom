@@ -124,14 +124,10 @@ from _helpers import set_PROJdir
 set_PROJdir()
 
 import logging
-from _helpers import configure_logging, update_p_nom_max, get_aggregation_strategies
-
 import yaml
 import pypsa
 import pandas as pd
 import geopandas as gpd
-
-idx = pd.IndexSlice
 
 logger = logging.getLogger(__name__)
 
@@ -141,11 +137,11 @@ with open('../config.yaml') as f:
 
 class filepaths:
     class input:
-        network = '../networks/elec_s.nc'
-        regions_onshore = "../resources/regions_onshore_elec_s.geojson"
-        clustering_shapefile = '../data/uk_tsos/DNO_License_Areas_20200506.shp'
+        network = '../' + config['project_folder'] + '/networks/elec_s.nc'
+        regions_onshore = '../' + config['project_folder'] + '/intermediate_files/regions_onshore_elec_s.geojson'
+        clustering_shapefile = '../' + config['project_folder'] + '/tso_clustering/DNO_License_Areas_20200506.shp'
 
-    output = '../resources/tso_busmap.csv'
+    output = '../' + config['project_folder'] + '/intermediate_files/tso_busmap.csv'
 
 
 if __name__ == "__main__":
@@ -165,6 +161,6 @@ if __name__ == "__main__":
 
     buses_tsos = gpd.sjoin(buses_sf, sf_dissolve, how='left')
 
-    busmap = pd.Series(buses_tsos['index_right'].fillna("No information")).rename('tso')
+    busmap = pd.Series(buses_tsos['index_right'].fillna("TSO_unk")).rename('tso')
 
     busmap.to_csv(filepaths.output)

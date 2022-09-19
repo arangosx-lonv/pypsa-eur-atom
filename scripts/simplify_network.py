@@ -82,24 +82,18 @@ The rule :mod:`simplify_network` does three things:
 3. Stub lines and links, i.e. dead-ends of the network, are sequentially removed from the network in the function ``remove_stubs(...)``. Components are moved along.
 
 """
-from _helpers import set_PROJdir
+from _helpers import set_PROJdir, update_p_nom_max, get_aggregation_strategies
 set_PROJdir()
 
 import logging
-from _helpers import configure_logging, update_p_nom_max, get_aggregation_strategies
-
-import yaml
-
 from add_electricity import load_costs
-
+import yaml
 import pandas as pd
 import geopandas as gpd
 import numpy as np
 import scipy as sp
 from scipy.sparse.csgraph import connected_components, dijkstra
-
 from functools import reduce
-
 import pypsa
 from pypsa.io import import_components_from_dataframe, import_series_from_dataframe
 from pypsa.networkclustering import busmap_by_stubs, aggregategenerators, aggregateoneport, get_clustering_from_busmap
@@ -112,17 +106,17 @@ with open('../config.yaml') as f:
 
 class filepaths:
     class input:
-        network = "../networks/elec.nc"
-        tech_costs = "../resources/costs.csv"
-        regions_onshore = "../resources/regions_onshore.geojson"
-        regions_offshore = "../resources/regions_offshore.geojson"
+        network = '../models/' + config['project_folder'] + '/networks/elec.nc'
+        tech_costs = '../data/costs.csv'
+        regions_onshore = '../models/' + config['project_folder'] + '/intermediate_files/regions_onshore.geojson'
+        regions_offshore = '../models/' + config['project_folder'] + '/intermediate_files/regions_offshore.geojson'
 
     class output:
-        network = '../networks/elec_s.nc'
-        regions_onshore = "../resources/regions_onshore_elec_s.geojson"
-        regions_offshore = "../resources/regions_offshore_elec_s.geojson"
-        busmap = '../resources/busmap_elec_s.csv'
-        connection_costs = '../resources/connection_costs_s.csv'
+        network = '../models/' + config['project_folder'] + '/networks/elec_s.nc'
+        regions_onshore = '../models/' + config['project_folder'] + '/intermediate_files/regions_onshore_elec_s.geojson'
+        regions_offshore = '../models/' + config['project_folder'] + '/intermediate_files/regions_offshore_elec_s.geojson'
+        busmap = '../models/' + config['project_folder'] + '/intermediate_files/busmap_elec_s.csv'
+        connection_costs = '../models/' + config['project_folder'] + '/intermediate_files/connection_costs_s.csv'
 
 
 def simplify_network_to_380(n):

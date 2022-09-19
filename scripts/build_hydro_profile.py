@@ -62,13 +62,10 @@ from _helpers import set_PROJdir
 set_PROJdir()
 
 import logging
-from _helpers import configure_logging
-
 import yaml
 import atlite
 import geopandas as gpd
 import pandas as pd
-
 import country_converter as coco
 cc = coco.CountryConverter()
 
@@ -78,11 +75,11 @@ with open('../config.yaml') as f:
 
 class filepaths:
     class input:
-        country_shapes = '../resources/country_shapes.geojson'
+        country_shapes = '../models/' + config['project_folder'] + '/intermediate_files/country_shapes.geojson'
         eia_hydro_generation = '../data/eia_hydro_annual_generation.csv'
-        cutout = f"../cutouts/{config['renewable']['hydro']['cutout']}.nc" if 'hydro' in config['renewable'] else "config['renewable']['hydro']['cutout'] not configured"
+        cutout = f"../data/cutouts/{config['renewable']['hydro']['cutout']}.nc" if 'hydro' in config['renewable'] else "config['renewable']['hydro']['cutout'] not configured"
 
-    output = '../resources/profile_hydro.nc'
+    output = '../models/' + config['project_folder'] + '/intermediate_files/profile_hydro.nc'
 
 def get_eia_annual_hydro_generation(fn, countries):
 

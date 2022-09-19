@@ -40,15 +40,12 @@ Description
 -----------
 
 """
-from _helpers import set_PROJdir
+from _helpers import set_PROJdir, REGION_COLS
 set_PROJdir()
 
 import logging
-from _helpers import configure_logging, REGION_COLS
-
 import pypsa
 import yaml
-import os
 import pandas as pd
 import numpy as np
 import geopandas as gpd
@@ -63,13 +60,13 @@ with open('../config.yaml') as f:
 
 class filepaths:
     class input:
-        country_shapes = '../resources/country_shapes.geojson'
-        offshore_shapes = '../resources/offshore_shapes.geojson'
-        base_network = '../networks/base.nc'
+        country_shapes = '../models/' + config['project_folder'] + '/intermediate_files/country_shapes.geojson'
+        offshore_shapes = '../models/' + config['project_folder'] + '/intermediate_files/offshore_shapes.geojson'
+        base_network = '../models/' + config['project_folder'] + '/networks/base.nc'
 
     class output:
-        regions_onshore = '../resources/regions_onshore.geojson'
-        regions_offshore = '../resources/regions_offshore.geojson'
+        regions_onshore = '../models/' + config['project_folder'] + '/intermediate_files/regions_onshore.geojson'
+        regions_offshore = '../models/' + config['project_folder'] + '/intermediate_files/regions_offshore.geojson'
 
 
 def voronoi_partition_pts(points, outline):

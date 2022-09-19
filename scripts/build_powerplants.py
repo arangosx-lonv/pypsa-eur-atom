@@ -74,13 +74,10 @@ from _helpers import set_PROJdir
 set_PROJdir()
 
 import logging
-from _helpers import configure_logging
-
 import yaml
 import pypsa
 import powerplantmatching as pm
 import pandas as pd
-
 from powerplantmatching.export import map_country_bus
 
 logger = logging.getLogger(__name__)
@@ -91,10 +88,10 @@ with open('../config.yaml') as f:
 
 class filepaths:
     class input:
-        base_network = '../networks/base.nc'
+        base_network = '../models/' + config['project_folder'] + '/networks/base.nc'
         custom_powerplants = '../data/custom_powerplants.csv'
 
-    output = '../resources/powerplants.csv'
+    output = '../models/' + config['project_folder'] + '/intermediate_files/powerplants.csv'
 
 
 def add_custom_powerplants(ppl, custom_powerplants, custom_ppl_query=False):
