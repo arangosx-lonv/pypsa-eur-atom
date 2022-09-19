@@ -462,17 +462,19 @@ def plot_busmap_for_n_clusters(n, n_clusters, fn=None):
 
 
 if __name__ == "__main__":
-    n = pypsa.Network(filepaths.input.network)
-    n.buses['carrier'] = 'AC'
 
     country_weights = config.get('country_weights', None)
     tso_weights = config.get('tso_weights', None)
 
-    renewable_carriers = pd.Index([tech
-                                   for tech in n.generators.carrier.unique()
-                                   if tech in config['renewable']])
-
     for nclust in config['clusters']:
+        # Re-import the network to avoid variable name conflicts when grouping repeatedly over TSO's (to be made more elegant in the future)
+        n = pypsa.Network(filepaths.input.network)
+        n.buses['carrier'] = 'AC'
+
+        renewable_carriers = pd.Index([tech
+                                       for tech in n.generators.carrier.unique()
+                                       if tech in config['renewable']])
+
         if str(nclust).endswith('m'):
             n_clusters = int(nclust[:-1])
             aggregate_carriers = config["electricity"].get("conventional_carriers")
@@ -489,6 +491,7 @@ if __name__ == "__main__":
             linemap = n.lines.index.to_series()
             clustering = pypsa.networkclustering.Clustering(n, busmap, linemap, linemap, pd.Series(dtype='O'))
         else:
+            print("Clustering network to " + str(nclust) + " clusters.")
             line_length_factor = config['lines']['length_factor']
             Nyears = n.snapshot_weightings.objective.sum()/8760
 
@@ -515,6 +518,7 @@ if __name__ == "__main__":
                 logger.info(f"Imported custom busmap from {filepaths.input.custom_busmap(n_clusters)}")
 
             cluster_config = config.get('clustering', {}).get('cluster_network', {})
+
             clustering = clustering_for_n_clusters(n, n_clusters, custom_busmap, aggregate_carriers,
                                                    line_length_factor, aggregation_strategies,
                                                    config['solving']['solver']['name'],
