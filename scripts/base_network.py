@@ -64,6 +64,7 @@ Description
 from _helpers import set_PROJdir
 set_PROJdir()
 
+import os
 import logging
 import pypsa
 import yaml
@@ -97,7 +98,9 @@ class filepaths:
         offshore_shapes = '../models/' + config['project_folder'] + '/intermediate_files/offshore_shapes.geojson'
         europe_shape = '../models/' + config['project_folder'] + '/intermediate_files/europe_shape.geojson'
 
-    output = '../models/' + config['project_folder'] + '/networks/base.nc'
+    class output:
+        network_folder = '../models/' + config['project_folder'] + '/networks/base'
+        network_file = '../models/' + config['project_folder'] + '/networks/base/base.nc'
 
 
 def _get_oid(df):
@@ -610,4 +613,8 @@ if __name__ == "__main__":
                      filepaths.input.parameter_corrections, config)
 
     n.meta = config
-    n.export_to_netcdf(filepaths.output)
+
+    if not os.path.exists(filepaths.output.network_folder):
+        os.makedirs(filepaths.output.network_folder)
+    n.export_to_netcdf(filepaths.output.network_file)
+    n.export_to_csv_folder(filepaths.output.network_folder)

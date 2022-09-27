@@ -120,6 +120,8 @@ Exemplary unsolved network clustered to 37 nodes:
     :align: center
 
 """
+import os
+
 from _helpers import set_PROJdir, update_p_nom_max, get_aggregation_strategies
 set_PROJdir()
 
@@ -149,7 +151,7 @@ with open('../config.yaml') as f:
 
 class filepaths:
     class input:
-        network = '../models/' + config['project_folder'] + '/networks/elec_s.nc'
+        network = '../models/' + config['project_folder'] + '/networks/elec_s/elec_s.nc'
         regions_onshore = '../models/' + config['project_folder'] + '/intermediate_files/regions_onshore_elec_s.geojson'
         regions_offshore = '../models/' + config['project_folder'] + '/intermediate_files/regions_offshore_elec_s.geojson'
         busmap = '../models/' + config['project_folder'] + '/intermediate_files/busmap_elec_s.csv'
@@ -160,7 +162,8 @@ class filepaths:
         tech_costs = "../data/costs.csv"
 
     class output:
-        network = lambda w: '../models/' + config['project_folder'] + '/networks/elec_s_' + w + '.nc'
+        network_folder = lambda w: '../models/' + config['project_folder'] + '/networks/elec_s_' + w
+        network_file = lambda w: '../models/' + config['project_folder'] + '/networks/elec_s_' + w + '/elec_s_' + w + '.nc'
         regions_onshore = lambda w: '../models/' + config['project_folder'] + '/intermediate_files/regions_onshore_elec_s_' + w + '.geojson'
         regions_offshore = lambda w: '../models/' + config['project_folder'] + '/intermediate_files/regions_offshore_elec_s_' + w + '.geojson'
         busmap = lambda w: '../models/' + config['project_folder'] + '/intermediate_files/busmap_elec_s_' + w + '.csv'
@@ -529,7 +532,11 @@ if __name__ == "__main__":
         update_p_nom_max(clustering.network)
 
         clustering.network.meta = config
-        clustering.network.export_to_netcdf(filepaths.output.network(str(nclust)))
+
+        if not os.path.exists(filepaths.output.network_folder(str(nclust))):
+            os.makedirs(filepaths.output.network_folder(str(nclust)))
+        clustering.network.export_to_netcdf(filepaths.output.network_file(str(nclust)))
+        clustering.network.export_to_csv_folder(filepaths.output.network_folder(str(nclust)))
 
         # also available: linemap_positive, linemap_negative
         getattr(clustering, 'busmap').to_csv(filepaths.output.busmap(str(nclust)))

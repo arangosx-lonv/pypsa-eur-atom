@@ -137,7 +137,7 @@ with open('../config.yaml') as f:
 
 class filepaths:
     class input:
-        network = '../' + config['project_folder'] + '/networks/elec_s.nc'
+        network = '../' + config['project_folder'] + '/networks/elec_s/elec_s.nc'
         regions_onshore = '../' + config['project_folder'] + '/intermediate_files/regions_onshore_elec_s.geojson'
         clustering_shapefile = '../' + config['project_folder'] + '/tso_clustering/DNO_License_Areas_20200506.shp'
 

@@ -85,6 +85,7 @@ It further adds extendable ``generators`` with **zero** capacity for
 from _helpers import set_PROJdir, update_p_nom_max
 set_PROJdir()
 
+import os
 import logging
 import yaml
 import pypsa
@@ -105,7 +106,7 @@ with open('../config.yaml') as f:
 
 class filepaths:
     class input:
-        base_network = '../models/' + config['project_folder'] + '/networks/base.nc'
+        base_network = '../models/' + config['project_folder'] + '/networks/base/base.nc'
         tech_costs = "../data/costs.csv"
         regions = '../models/' + config['project_folder'] + '/intermediate_files/regions_onshore.geojson'
         powerplants = '../models/' + config['project_folder'] + '/intermediate_files/powerplants.csv'
@@ -119,7 +120,9 @@ class filepaths:
         #               for tech in config['conventional']
         #               for attr in config['conventional'].get(tech, {})}
 
-    output = '../models/' + config['project_folder'] + '/networks/elec.nc'
+    class output:
+        network_folder = '../models/' + config['project_folder'] + '/networks/elec'
+        network_file = '../models/' + config['project_folder'] + '/networks/elec/elec.nc'
 
 
 def normed(s): return s/s.sum()
@@ -653,4 +656,8 @@ if __name__ == "__main__":
     add_nice_carrier_names(n, config)
 
     n.meta = config
-    n.export_to_netcdf(filepaths.output)
+
+    if not os.path.exists(filepaths.output.network_folder):
+        os.makedirs(filepaths.output.network_folder)
+    n.export_to_netcdf(filepaths.output.network_file)
+    n.export_to_csv_folder(filepaths.output.network_folder)

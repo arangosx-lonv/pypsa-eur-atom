@@ -62,7 +62,7 @@ class filepaths:
     class input:
         country_shapes = '../models/' + config['project_folder'] + '/intermediate_files/country_shapes.geojson'
         offshore_shapes = '../models/' + config['project_folder'] + '/intermediate_files/offshore_shapes.geojson'
-        base_network = '../models/' + config['project_folder'] + '/networks/base.nc'
+        base_network = '../models/' + config['project_folder'] + '/networks/base/base.nc'
 
     class output:
         regions_onshore = '../models/' + config['project_folder'] + '/intermediate_files/regions_onshore.geojson'

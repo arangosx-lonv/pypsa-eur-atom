@@ -88,7 +88,7 @@ with open('../config.yaml') as f:
 
 class filepaths:
     class input:
-        base_network = '../models/' + config['project_folder'] + '/networks/base.nc'
+        base_network = '../models/' + config['project_folder'] + '/networks/base/base.nc'
         custom_powerplants = '../data/custom_powerplants.csv'
 
     output = '../models/' + config['project_folder'] + '/intermediate_files/powerplants.csv'

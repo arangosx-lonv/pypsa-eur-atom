@@ -1,4 +1,5 @@
 import os
+import sys
 import subprocess
 import yaml
 import time
@@ -15,32 +16,32 @@ with open('config.yaml') as f:
 # before you will be able to run base_network. Scripts in the same step are not dependent on each other.
 
 # Step 0: Create the directory where the project files will be stored
-build_project_folders = False
+build_project_folders = True
 
 # Step 1: Build country polygons used later
-build_shapes = False
+build_shapes = True
 
 # Step 2: Build the base network
-base_network = False
+base_network = True
 
 # Step 3: Build Voronoi cells to represent each bus's coverage area
-build_bus_regions = False
+build_bus_regions = True
 
 # Step 4: Calculate bus-level data for the base network
-build_renewable_profiles = False
-build_hydro_profile = False
-build_powerplants = False
+build_renewable_profiles = True
+build_hydro_profile = True
+build_powerplants = True
 
 # Step 5: Attach the information from step 3 to each bus
-add_electricity = False
+add_electricity = True
 
 # Step 6: Simplify the base network (cleaning required to cluster the network)
-simplify_network = False
+simplify_network = True
 
 # Step 7 (optional): Prepare the TSO matching. This setting is drawn automatically from the config.yaml file, but can
 # be manually overridden here if desired.
 prepare_tso_busmap = config['enable'].get('tso_busmap', False)
-prepare_tso_busmap = False
+# prepare_tso_busmap = False
 
 # Step 8: Cluster the network
 cluster_network = True
@@ -76,7 +77,6 @@ if __name__ == "__main__":
             else:
                 if overwrite_bool.capitalize() == "N":
                     print("config_archived.yaml not overwritten.")
-                    sys.exit()
                 else:
                     print("config_archived.yaml updated with latest parameters.")
                     shutil.copyfile("../config.yaml", "../models/" + config['project_folder'] + "/config_archived.yaml")

@@ -85,6 +85,7 @@ The rule :mod:`simplify_network` does three things:
 from _helpers import set_PROJdir, update_p_nom_max, get_aggregation_strategies
 set_PROJdir()
 
+import os
 import logging
 from add_electricity import load_costs
 import yaml
@@ -106,16 +107,18 @@ with open('../config.yaml') as f:
 
 class filepaths:
     class input:
-        network = '../models/' + config['project_folder'] + '/networks/elec.nc'
+        network = '../models/' + config['project_folder'] + '/networks/elec/elec.nc'
         tech_costs = '../data/costs.csv'
         regions_onshore = '../models/' + config['project_folder'] + '/intermediate_files/regions_onshore.geojson'
         regions_offshore = '../models/' + config['project_folder'] + '/intermediate_files/regions_offshore.geojson'
 
     class output:
-        network = '../models/' + config['project_folder'] + '/networks/elec_s.nc'
+        network_folder = '../models/' + config['project_folder'] + '/networks/elec_s'
+        network_file = '../models/' + config['project_folder'] + '/networks/elec_s/elec_s.nc'
         regions_onshore = '../models/' + config['project_folder'] + '/intermediate_files/regions_onshore_elec_s.geojson'
         regions_offshore = '../models/' + config['project_folder'] + '/intermediate_files/regions_offshore_elec_s.geojson'
         busmap = '../models/' + config['project_folder'] + '/intermediate_files/busmap_elec_s.csv'
+        linemap = '../models/' + config['project_folder'] + '/intermediate_files/linemap_elec_s.csv'
         connection_costs = '../models/' + config['project_folder'] + '/intermediate_files/connection_costs_s.csv'
 
 
@@ -385,7 +388,11 @@ if __name__ == "__main__":
     update_p_nom_max(n)
 
     n.meta = config
-    n.export_to_netcdf(filepaths.output.network)
+
+    if not os.path.exists(filepaths.output.network_folder):
+        os.makedirs(filepaths.output.network_folder)
+    n.export_to_netcdf(filepaths.output.network_file)
+    n.export_to_csv_folder(filepaths.output.network_folder)
 
     busmap_s = reduce(lambda x, y: x.map(y), busmaps[1:], busmaps[0])
     busmap_s.to_csv(filepaths.output.busmap)

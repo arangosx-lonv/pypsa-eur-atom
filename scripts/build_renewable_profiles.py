@@ -203,7 +203,7 @@ with open('../config.yaml') as f:
 
 class filepaths:
     class input:
-        base_network = '../models/' + config['project_folder'] + '/networks/base.nc'
+        base_network = '../models/' + config['project_folder'] + '/networks/base/base.nc'
         corine = '../data/corine_land_use/g250_clc06_V18_5.tif'
         natura = '../data/natura.tiff'
         gebco = '../data/bathymetry/gebco_2022_n75.0_s30.0_w-20.0_e40.0.nc'
