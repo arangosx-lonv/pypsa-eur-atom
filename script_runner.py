@@ -18,29 +18,29 @@ with open('config.yaml') as f:
 # Step 0: Create the directory where the project files will be stored
 build_project_folders = True
 
-# Step 1: Build country polygons used later
+# Step 1: Build country and regional polygons
 build_shapes = True
 
 # Step 2: Build the base network
 base_network = True
 
-# Step 3: Build Voronoi cells to represent each bus's coverage area
+# Step 3: Build Voronoi cells to represent each node's coverage area
 build_bus_regions = True
 
-# Step 4: Calculate bus-level data for the base network
+# Step 4: Calculate node-level data for the base network
 build_renewable_profiles = True
 build_hydro_profile = True
 build_powerplants = True
 
-# Step 5: Attach the information from step 3 to each bus
+# Step 5: Attach the information from step 3 to each node
 add_electricity = True
 
-# Step 6: Simplify the base network (cleaning required to cluster the network)
+# Step 6: Simplify the base network (cleaning required before clustering the network)
 simplify_network = True
 
-# Step 7 (optional): Prepare the TSO matching. This setting is drawn automatically from the config.yaml file, but can
-# be manually overridden here if desired.
-prepare_tso_busmap = config['enable'].get('tso_busmap', False)
+# Step 7 (optional): Prepare the TSO matching. This setting is drawn automatically from the
+# config.yaml file, but can be manually overridden here if desired.
+prepare_tso_busmap = config.get('tso_weights', False)
 # prepare_tso_busmap = False
 
 # Step 8: Cluster the network

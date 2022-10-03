@@ -156,9 +156,9 @@ class filepaths:
         regions_offshore = '../models/' + config['project_folder'] + '/intermediate_files/regions_offshore_elec_s.geojson'
         busmap = '../models/' + config['project_folder'] + '/intermediate_files/busmap_elec_s.csv'
         tso_busmap = ('../models/' + config['project_folder'] + '/intermediate_files/tso_busmap.csv'
-                      if config["enable"].get("tso_busmap", False) else [])
+                      if config.get("tso_weights", False) else [])
         custom_busmap = lambda w: ('../models/' + config['project_folder'] + '/intermediate_files/custom_busmap_elec_s_' + w + '.csv'
-                                   if config["enable"].get("custom_busmap", False) else [])
+                                   if config.get("custom_busmap", False) else [])
         tech_costs = "../data/costs.csv"
 
     class output:
@@ -514,11 +514,11 @@ if __name__ == "__main__":
                 for p in aggregation_strategies.keys()
             }
 
-            custom_busmap = config["enable"].get("custom_busmap", False)
-            if custom_busmap:
+            if config.get("custom_busmap", False):
                 custom_busmap = pd.read_csv(filepaths.input.custom_busmap(n_clusters), index_col=0, squeeze=True)
                 custom_busmap.index = custom_busmap.index.astype(str)
                 logger.info(f"Imported custom busmap from {filepaths.input.custom_busmap(n_clusters)}")
+            else: custom_busmap = False
 
             cluster_config = config.get('clustering', {}).get('cluster_network', {})
 
