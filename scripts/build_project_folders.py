@@ -11,11 +11,11 @@ project_folder = config['project_folder']
 def create_directory(projectname):
     os.makedirs("../models/" + projectname + "/intermediate_files")
     os.makedirs("../models/" + projectname + "/networks")
-
-    if config.get('tso_weights', False):
-        print("Custom TSO clustering desired - creating template folder. Please copy the desired TSO service area shapefile into the tso_clustering subfolder and update prepare_tso_busmap.py accordingly.")
-        os.makedirs("../models/" + projectname + "/tso_clustering")
-        shutil.copyfile("prepare_tso_busmap_template.py", "../models/" + projectname + "/tso_clustering/prepare_tso_busmap.py")
+    os.makedirs("../models/" + projectname + "/tso_clustering")
+    shutil.copyfile("prepare_tso_busmap_template.py",
+                    "../models/" + projectname + "/tso_clustering/prepare_tso_busmap.py")
+    print("Project folder created."
+          "If custom TSO weights are desired, please copy the relevant service area shapefile into the tso_clustering subfolder and update prepare_tso_busmap.py accordingly.")
     return
 
 if __name__ == "__main__":
