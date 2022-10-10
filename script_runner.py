@@ -16,6 +16,7 @@ with open('config.yaml') as f:
 # before you will be able to run base_network. Scripts in the same step are not dependent on each other.
 
 # Step 0: Create the directory where the project files will be stored
+# If set to True, this will overwrite any existing folder with the same name
 build_project_folders = True
 
 # Step 1: Build country and regional polygons

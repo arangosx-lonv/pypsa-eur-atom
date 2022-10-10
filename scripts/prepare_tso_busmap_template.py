@@ -3,123 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 # coding: utf-8
-"""
-Creates networks clustered to ``{cluster}`` number of zones with aggregated buses, generators and transmission corridors.
 
-Relevant Settings
------------------
-
-.. code:: yaml
-
-    clustering:
-      cluster_network:
-      aggregation_strategies:
-
-    focus_weights:
-
-    solving:
-        solver:
-            name:
-
-    lines:
-        length_factor:
-
-.. seealso::
-    Documentation of the configuration file ``config.yaml`` at
-    :ref:`toplevel_cf`, :ref:`renewable_cf`, :ref:`solving_cf`, :ref:`lines_cf`
-
-Inputs
-------
-
-- ``resources/regions_onshore_elec_s{simpl}.geojson``: confer :ref:`simplify`
-- ``resources/regions_offshore_elec_s{simpl}.geojson``: confer :ref:`simplify`
-- ``resources/busmap_elec_s{simpl}.csv``: confer :ref:`simplify`
-- ``networks/elec_s{simpl}.nc``: confer :ref:`simplify`
-- ``data/custom_busmap_elec_s{simpl}_{clusters}.csv``: optional input
-
-Outputs
--------
-
-- ``resources/regions_onshore_elec_s{simpl}_{clusters}.geojson``:
-
-    .. image:: ../img/regions_onshore_elec_s_X.png
-        :scale: 33 %
-
-- ``resources/regions_offshore_elec_s{simpl}_{clusters}.geojson``:
-
-    .. image:: ../img/regions_offshore_elec_s_X.png
-        :scale: 33 %
-
-- ``resources/busmap_elec_s{simpl}_{clusters}.csv``: Mapping of buses from ``networks/elec_s{simpl}.nc`` to ``networks/elec_s{simpl}_{clusters}.nc``;
-- ``resources/linemap_elec_s{simpl}_{clusters}.csv``: Mapping of lines from ``networks/elec_s{simpl}.nc`` to ``networks/elec_s{simpl}_{clusters}.nc``;
-- ``networks/elec_s{simpl}_{clusters}.nc``:
-
-    .. image:: ../img/elec_s_X.png
-        :scale: 40  %
-
-Description
------------
-
-.. note::
-
-    **Why is clustering used both in** ``simplify_network`` **and** ``cluster_network`` **?**
-
-        Consider for example a network ``networks/elec_s100_50.nc`` in which
-        ``simplify_network`` clusters the network to 100 buses and in a second
-        step ``cluster_network``` reduces it down to 50 buses.
-
-        In preliminary tests, it turns out, that the principal effect of
-        changing spatial resolution is actually only partially due to the
-        transmission network. It is more important to differentiate between
-        wind generators with higher capacity factors from those with lower
-        capacity factors, i.e. to have a higher spatial resolution in the
-        renewable generation than in the number of buses.
-
-        The two-step clustering allows to study this effect by looking at
-        networks like ``networks/elec_s100_50m.nc``. Note the additional
-        ``m`` in the ``{cluster}`` wildcard. So in the example network
-        there are still up to 100 different wind generators.
-
-        In combination these two features allow you to study the spatial
-        resolution of the transmission network separately from the
-        spatial resolution of renewable generators.
-
-    **Is it possible to run the model without the** ``simplify_network`` **rule?**
-
-        No, the network clustering methods in the PyPSA module
-        `pypsa.networkclustering <https://github.com/PyPSA/PyPSA/blob/master/pypsa/networkclustering.py>`_
-        do not work reliably with multiple voltage levels and transformers.
-
-.. tip::
-    The rule :mod:`cluster_all_networks` runs
-    for all ``scenario`` s in the configuration file
-    the rule :mod:`cluster_network`.
-
-Exemplary unsolved network clustered to 512 nodes:
-
-.. image:: ../img/elec_s_512.png
-    :scale: 40  %
-    :align: center
-
-Exemplary unsolved network clustered to 256 nodes:
-
-.. image:: ../img/elec_s_256.png
-    :scale: 40  %
-    :align: center
-
-Exemplary unsolved network clustered to 128 nodes:
-
-.. image:: ../img/elec_s_128.png
-    :scale: 40  %
-    :align: center
-
-Exemplary unsolved network clustered to 37 nodes:
-
-.. image:: ../img/elec_s_37.png
-    :scale: 40  %
-    :align: center
-
-"""
 # Hacky "import" of set_PROJdir from _helpers.py, which is in another folder. Will find a more elegant solution later.
 import os
 import sys
@@ -149,16 +33,31 @@ class filepaths:
 
 
 if __name__ == "__main__":
-    n = pypsa.Network(filepaths.input.network)
 
+    # Read in the TSO shapefile
     sf = gpd.read_file(filepaths.input.clustering_shapefile)
 
-    # Optional: define a custom mapping to clean/shorten TSO names based on another field (here called "LongName").
+    # If the shapefile is ONLY the polygon containing the TSO of interest, define the TSO variable as in the line below
+    sf['TSO'] = 'TSO_1'
+
+    # If the shapefile contains multiple TSOs or regions, define the TSO variable based on a variable in the shapefile
+    # The specifics of this process will vary from context to context, but the general steps remain the same:
+    # 1. Identify the variable with which you can capture the TSO region
+    # 2. Define a dictionary to map that variable to a new variable called "TSO" (ideally with relatively short names)
+    # 3. Map the values to produce a shapefile where all polygons are identified by their TSO
+
+    # Example: the shapefile had a variable called "LongName" with 14 unique values. We wanted to capture two of them,
+    # while combining the remaining 12 under "NG" for National Grid. Define the TSO_mapping dictionary to capture the
+    # specific values we want to keep, then map "LongName" and fill in the blanks with "NG".
     TSO_mapping = {"SSE": "SSE",
                    "SPEN (SP Distribution)": "SP"}
     sf['TSO'] = sf.LongName.map(TSO_mapping).fillna("NG")
 
-    sf_dissolve = sf[['TSO', 'geometry']].dissolve(by='TSO').to_crs(gpd.read_file(filepaths.input.regions_onshore).crs)
+
+    # NO USER INPUT REQUIRED BELOW THIS LINE #
+    sf_dissolve = sf[['TSO', 'geometry']].to_crs(gpd.read_file(filepaths.input.regions_onshore).crs)
+
+    n = pypsa.Network(filepaths.input.network)
 
     buses_sf = gpd.GeoDataFrame(n.buses, geometry=gpd.points_from_xy(n.buses.x, n.buses.y)).set_crs(
         gpd.read_file(filepaths.input.regions_onshore).crs)
