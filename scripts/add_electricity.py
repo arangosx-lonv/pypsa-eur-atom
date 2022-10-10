@@ -112,7 +112,8 @@ class filepaths:
         powerplants = '../models/' + config['project_folder'] + '/intermediate_files/powerplants.csv'
         hydro_capacities = '../data/hydro_capacities.csv'
         geth_hydro_capacities = '../data/geth2015_hydro_capacities.csv'
-        load = '../data/load.csv'
+        load = ('../data/synthetic_load_' + str(config['load_profile_year']) + '.csv'
+                if config.get('load_profile_year', 2020) != 2020 else '../data/load.csv')
         nuts3_shapes = '../models/' + config['project_folder'] + '/intermediate_files/nuts3_shapes.geojson'
         profile = lambda w: '../models/' + config['project_folder'] + '/intermediate_files/profile_' + w + '.nc'
         # Attributes excluded for now, as conventional generators not currently included
@@ -220,8 +221,14 @@ def attach_load(n, regions, load, nuts3_shapes, countries, scaling=1.):
     substation_lv_i = n.buses.index[n.buses['substation_lv']]
     regions = (gpd.read_file(regions).set_index('name')
                .reindex(substation_lv_i))
+    if load == '../data/load.csv':
+        logger.info("Attaching base (current-day) load profile")
+    else:
+        logger.info("Attaching synthetic load profile for " + str(config['load_profile_year']))
+
     opsd_load = (pd.read_csv(load, index_col=0, parse_dates=True)
                 .filter(items=countries))
+    opsd_load.index = opsd_load.index.map(lambda x: x.replace(year=2013))
 
     logger.info(f"Load data scaled with scaling factor {scaling}.")
     opsd_load *= scaling
@@ -243,7 +250,7 @@ def attach_load(n, regions, load, nuts3_shapes, countries, scaling=1.):
 
             # relative factors 0.6 and 0.4 have been determined from a linear
             # regression on the country to continent load data
-            factors = normed(0.6 * normed(gdp_n) + 0.4 * normed(pop_n))
+            factors = normed(0.2 * normed(gdp_n) + 0.8 * normed(pop_n))
             return pd.DataFrame(factors.values * l.values[:,np.newaxis],
                                 index=l.index, columns=factors.index)
 

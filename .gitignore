@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: CC0-1.0
 
 .ipynb_checkpoints
-*.ipynb
 .idea
 __pycache__
 *dconf

@@ -120,8 +120,12 @@ Exemplary unsolved network clustered to 37 nodes:
     :align: center
 
 """
-from _helpers import set_PROJdir
-set_PROJdir()
+# Hacky "import" of set_PROJdir from _helpers.py, which is in another folder. Will find a more elegant solution later.
+import os
+import sys
+if not os.environ.get("PROJ_LIB", False):
+    os.environ["PROJ_LIB"] = sys.prefix + "\\Library\\share\\proj"
+    print("No default PROJ data directory found, setting to " + os.environ["PROJ_LIB"])
 
 import logging
 import yaml
@@ -132,16 +136,16 @@ import geopandas as gpd
 logger = logging.getLogger(__name__)
 
 # Snakemake parameters replicated here
-with open('../config.yaml') as f:
+with open('../../../config.yaml') as f:
     config = yaml.safe_load(f)
 
 class filepaths:
     class input:
-        network = '../' + config['project_folder'] + '/networks/elec_s/elec_s.nc'
-        regions_onshore = '../' + config['project_folder'] + '/intermediate_files/regions_onshore_elec_s.geojson'
-        clustering_shapefile = '../' + config['project_folder'] + '/tso_clustering/DNO_License_Areas_20200506.shp'
+        network = '../networks/elec_s/elec_s.nc'
+        regions_onshore = '../intermediate_files/regions_onshore_elec_s.geojson'
+        clustering_shapefile = '_______________.shp' # ENTER SHAPEFILE NAME HERE
 
-    output = '../' + config['project_folder'] + '/intermediate_files/tso_busmap.csv'
+    output = '../intermediate_files/tso_busmap.csv'
 
 
 if __name__ == "__main__":
@@ -149,9 +153,9 @@ if __name__ == "__main__":
 
     sf = gpd.read_file(filepaths.input.clustering_shapefile)
 
+    # Optional: define a custom mapping to clean/shorten TSO names based on another field (here called "LongName").
     TSO_mapping = {"SSE": "SSE",
                    "SPEN (SP Distribution)": "SP"}
-
     sf['TSO'] = sf.LongName.map(TSO_mapping).fillna("NG")
 
     sf_dissolve = sf[['TSO', 'geometry']].dissolve(by='TSO').to_crs(gpd.read_file(filepaths.input.regions_onshore).crs)
@@ -161,6 +165,7 @@ if __name__ == "__main__":
 
     buses_tsos = gpd.sjoin(buses_sf, sf_dissolve, how='left')
 
+    # The .fillna setting will fill all other nodes that aren't captured in the shapefile. Don't use "N/A"
     busmap = pd.Series(buses_tsos['index_right'].fillna("TSO_unk")).rename('tso')
 
     busmap.to_csv(filepaths.output)

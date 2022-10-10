@@ -12,14 +12,15 @@ def create_directory(projectname):
     os.makedirs("../models/" + projectname + "/intermediate_files")
     os.makedirs("../models/" + projectname + "/networks")
 
-    if config['enable'].get('tso_busmap', False):
+    if config.get('tso_weights', False):
         print("Custom TSO clustering desired - creating template folder. Please copy the desired TSO service area shapefile into the tso_clustering subfolder and update prepare_tso_busmap.py accordingly.")
         os.makedirs("../models/" + projectname + "/tso_clustering")
+        shutil.copyfile("prepare_tso_busmap_template.py", "../models/" + projectname + "/tso_clustering/prepare_tso_busmap.py")
     return
 
 if __name__ == "__main__":
     if os.path.exists("../models/" + project_folder):
-        overwrite_bool = input("A project folder already exists at models/" + project_folder + ". Confirm overwrite? All files in subfolder will be deleted. Y/N: ")
+        overwrite_bool = input("A project folder already exists at models/" + project_folder + ". Confirm overwrite? All files in subfolder will be deleted! Y/N: ")
         if not overwrite_bool.capitalize() in ["Y","N"]:
             print('Please run script again and respond with "Y" or "N"')
             sys.exit()
