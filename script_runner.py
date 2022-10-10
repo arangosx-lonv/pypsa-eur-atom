@@ -32,16 +32,14 @@ build_renewable_profiles = True
 build_hydro_profile = True
 build_powerplants = True
 
-# Step 5: Attach the information from step 3 to each node
+# Step 5: Attach the information from steps 3 & 4 to each node in the base network
 add_electricity = True
 
-# Step 6: Simplify the base network (cleaning required before clustering the network)
+# Step 6: Simplify the base network (cleaning required prior to clustering)
 simplify_network = True
 
-# Step 7 (optional): Prepare the TSO matching. This setting is drawn automatically from the
-# config.yaml file, but can be manually overridden here if desired.
-prepare_tso_busmap = config.get('tso_weights', False)
-# prepare_tso_busmap = False
+# Step 7 (optional): Prepare TSO matching
+prepare_tso_busmap = True
 
 # Step 8: Cluster the network
 cluster_network = True
