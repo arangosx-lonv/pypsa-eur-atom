@@ -8,9 +8,8 @@ __pycache__
 *dconf
 gurobi.log
 .vscode
-*.nc
 /data
 doc/_build
-config.yaml
 dconf
-/models
+/models/*
+config.yaml

@@ -1,32 +1,37 @@
 # SPDX-FileCopyrightText: : 2017-2022 The PyPSA-Eur Authors
-#
 # SPDX-License-Identifier: CC0-1.0
-
 version: 0.5.0
 
 # This folder name must match the folder in which the config.yaml file is stored!
 project_folder: ''
 
+# All countries included below. Remove those that are not desired in the network to increase computational speed.
+countries: ['AT', 'BE', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'GR', 'HU',
+            'IE', 'IT', 'LT', 'LU', 'LV', 'NL', 'NO', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK']
+
 clusters: [] # To keep all nodes (aside from stubs eliminated by simplify_network.py), use "all"
 
-countries: ['AL', 'AT', 'BA', 'BE', 'BG', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'GR', 'HR', 'HU',
-            'IE', 'IT', 'LT', 'LU', 'LV', 'ME', 'MK', 'NL', 'NO', 'PL', 'PT', 'RO', 'RS', 'SE', 'SI', 'SK'] # All countries
+# If using custom TSO clustering, structure these weights as a nested dictionary by country then TSO as seen below.
+# Note country and TSO weights are multiplicative, e.g., a Country1 weight of 0.8 and 0.8 to TSO_1 means that 64% of the
+# network's total clusters nodes will be assigned to the area inside Country1 served by TSO_1.
+#tso_weights: {'Country1': {'TSO_1': 0.4, 'TSO_2': 0.6},
+#              'Country2': {'TSO_3': 0.9}}
+
+# This setting should be turned on if the user desires to manually assign each bus in the simplified network to a
+# cluster. The user must provide this file (PULL A RANDOM BUSMAP FILE TO PROVIDE A TEMPLATE)
+# If a custom busmap is provided, it will override all the clustering parameters above
+custom_busmap: false
+
+# Available options: 2020, 2030, 2050.
+load_profile_year: 2020
 
 
-# Total weights must sum to 1 or less. Any remaining weight will be distributed among the remaining countries according
-# to the proportion of total network load represented by each country
-country_weights: {'DE': 1}
+# Advanced settings below this point. Changes should be made with caution and specific intent!
 
-# If using custom TSO clustering, structure these weights as a nested dictionary by country, then TSO.
-# E.g. {'GB': {'SSE': .8}} will distribute 80% of the nodes assigned to GB to the SSE TSO.
-# Note country and TSO weights are multiplicative, e.g. assigning a country_weight of 0.8 to GB and 0.8 to SSE means that
-# 64% of the TOTAL nodes will be distributed to the SSE area
-tso_weights: {'DE': {'Transnet': .66}}
 
-enable:
-  custom_busmap: false
-  tso_busmap: true
-
+# Important! At present, this setting must be left alone. It manages the boundaries of all the time series data mapped
+# to the network, including load and renewable profiles. As the renewable profiles current only cover 2013, this setting
+# must be maintained. To update the load profile from 2013 to a synthetic future load profile, use the next setting.
 snapshots:
   start: "2013-01-01"
   end: "2014-01-01"
