@@ -40,7 +40,7 @@ add_electricity = True
 simplify_network = True
 
 # Step 7 (optional): Prepare TSO matching
-prepare_tso_busmap = True
+prepare_tso_busmap = False
 
 # Step 8: Cluster the network
 cluster_network = True
