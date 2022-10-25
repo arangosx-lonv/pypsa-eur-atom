@@ -39,7 +39,7 @@ dependencies:
   - proj
   - fiona <= 1.18.20  # Till issue https://github.com/Toblerity/Fiona/issues/1085 is not solved
   - country_converter
-  - ipopt
+  - ipopt <= 3.11.1 # More recent versions can return issues with finding the solver executable
   - glpk
   - jupyter
 
