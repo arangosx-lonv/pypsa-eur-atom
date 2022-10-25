@@ -6,8 +6,8 @@ version: 0.5.0
 project_folder: ''
 
 # All countries included below. Remove those that are not desired in the network to increase computational speed.
-countries: ['AT', 'BE', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'GR', 'HU',
-            'IE', 'IT', 'LT', 'LU', 'LV', 'NL', 'NO', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK']
+countries: ['AT', 'BE', 'BG', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GB', 'GR', 'HU', 'IE', 'IT', 'LT', 'LU',
+            'LV', 'NL', 'NO', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK']
 
 clusters: [] # To keep all nodes (aside from stubs eliminated by simplify_network.py), use "all"
 
