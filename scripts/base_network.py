@@ -1,64 +1,24 @@
 # SPDX-FileCopyrightText: : 2017-2022 The PyPSA-Eur Authors
-#
 # SPDX-License-Identifier: MIT
-
 # coding: utf-8
 """
+Description
+-----------
 Creates the network topology from a `ENTSO-E map extract <https://github.com/PyPSA/GridKit/tree/master/entsoe>`_ (March 2022) as a PyPSA network.
-
-Relevant Settings
------------------
-
-.. code:: yaml
-
-    snapshots:
-
-    countries:
-
-    electricity:
-        voltages:
-
-    lines:
-        types:
-        s_max_pu:
-        under_construction:
-
-    links:
-        p_max_pu:
-        under_construction:
-        include_tyndp:
-
-    transformers:
-        x:
-        s_nom:
-        type:
-
-.. seealso::
-    Documentation of the configuration file ``config.yaml`` at
-    :ref:`snapshots_cf`, :ref:`toplevel_cf`, :ref:`electricity_cf`, :ref:`load_cf`,
-    :ref:`lines_cf`, :ref:`links_cf`, :ref:`transformers_cf`
 
 Inputs
 ------
-
 - ``data/entsoegridkit``:  Extract from the geographical vector data of the online `ENTSO-E Interactive Map <https://www.entsoe.eu/data/map/>`_ by the `GridKit <https://github.com/martacki/gridkit>`_ toolkit dating back to March 2022.
 - ``data/parameter_corrections.yaml``: Corrections for ``data/entsoegridkit``
-- ``data/links_p_nom.csv``: confer :ref:`links`
+- ``data/links_p_nom.csv``: Extra dataset for link capacity
 - ``data/links_tyndp.csv``: List of projects in the `TYNDP 2018 <https://tyndp.entsoe.eu/tyndp2018/>`_ that are at least *in permitting* with fields for start- and endpoint (names and coordinates), length, capacity, construction status, and project reference ID.
-- ``resources/country_shapes.geojson``: confer :ref:`shapes`
-- ``resources/offshore_shapes.geojson``: confer :ref:`shapes`
-- ``resources/europe_shape.geojson``: confer :ref:`shapes`
+- ``resources/country_shapes.geojson``: Country shapes out of country selection
+- ``resources/offshore_shapes.geojson``: EEZ shapes out of country selection
+- ``resources/europe_shape.geojson``: Outline of country selection including national borders and EEZ shapes
 
 Outputs
 -------
-
-- ``networks/base.nc``
-
-    .. image:: ../img/base.png
-        :scale: 33 %
-
-Description
------------
+- ``networks/base.nc``: Raw (unsimplified) network representation, trimmed to country selection
 
 """
 from _helpers import set_PROJdir

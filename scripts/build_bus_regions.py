@@ -1,43 +1,21 @@
 # SPDX-FileCopyrightText: : 2017-2022 The PyPSA-Eur Authors
-#
 # SPDX-License-Identifier: MIT
-
+# coding: utf-8
 """
+Description
+-----------
 Creates Voronoi shapes for each bus representing both onshore and offshore regions.
-
-Relevant Settings
------------------
-
-.. code:: yaml
-
-    countries:
-
-.. seealso::
-    Documentation of the configuration file ``config.yaml`` at
-    :ref:`toplevel_cf`
 
 Inputs
 ------
-
-- ``resources/country_shapes.geojson``: confer :ref:`shapes`
-- ``resources/offshore_shapes.geojson``: confer :ref:`shapes`
-- ``networks/base.nc``: confer :ref:`base`
+- ``resources/country_shapes.geojson``: Country shapes out of country selection
+- ``resources/offshore_shapes.geojson``: EEZ shapes out of country selection
+- ``networks/base.nc``: Raw (unsimplified) network representation, trimmed to country selection
 
 Outputs
 -------
-
-- ``resources/regions_onshore.geojson``:
-
-    .. image:: ../img/regions_onshore.png
-        :scale: 33 %
-
-- ``resources/regions_offshore.geojson``:
-
-    .. image:: ../img/regions_offshore.png
-        :scale: 33 %
-
-Description
------------
+- ``resources/regions_onshore.geojson``: Voronoi cells for buses located on land
+- ``resources/regions_offshore.geojson``: Voronoi cells for buses located on water
 
 """
 from _helpers import set_PROJdir, REGION_COLS

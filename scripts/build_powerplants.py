@@ -4,70 +4,34 @@
 
 # coding: utf-8
 """
-Retrieves conventional powerplant capacities and locations from `powerplantmatching <https://github.com/FRESNA/powerplantmatching>`_, assigns these to buses and creates a ``.csv`` file. It is possible to amend the powerplant database with custom entries provided in ``data/custom_powerplants.csv``.
-
-Relevant Settings
------------------
-
-.. code:: yaml
-
-    electricity:
-      powerplants_filter:
-      custom_powerplants:
-
-.. seealso::
-    Documentation of the configuration file ``config.yaml`` at
-    :ref:`electricity`
-
-Inputs
-------
-
-- ``networks/base.nc``: confer :ref:`base`.
-- ``data/custom_powerplants.csv``: custom powerplants in the same format as `powerplantmatching <https://github.com/FRESNA/powerplantmatching>`_ provides
-
-Outputs
--------
-
-- ``resource/powerplants.csv``: A list of conventional power plants (i.e. neither wind nor solar) with fields for name, fuel type, technology, country, capacity in MW, duration, commissioning year, retrofit year, latitude, longitude, and dam information as documented in the `powerplantmatching README <https://github.com/FRESNA/powerplantmatching/blob/master/README.md>`_; additionally it includes information on the closest substation/bus in ``networks/base.nc``.
-
-    .. image:: ../img/powerplantmatching.png
-        :scale: 30 %
-
-    **Source:** `powerplantmatching on GitHub <https://github.com/FRESNA/powerplantmatching>`_
-
 Description
 -----------
+Retrieves conventional powerplant capacities and locations from `powerplantmatching <https://github.com/FRESNA/powerplantmatching>`_, assigns these to buses and creates a ``.csv`` file. It is possible to amend the powerplant database with custom entries provided in ``data/custom_powerplants.csv``.
 
 The configuration options ``electricity: powerplants_filter`` and ``electricity: custom_powerplants`` can be used to control whether data should be retrieved from the original powerplants database or from custom amendmends. These specify `pandas.query <https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.query.html>`_ commands.
 
 1. Adding all powerplants from custom:
-
-    .. code:: yaml
-
-        powerplants_filter: false
-        custom_powerplants: true
+    ``powerplants_filter: False; custom_powerplants: True``
 
 2. Replacing powerplants in e.g. Germany by custom data:
-
-    .. code:: yaml
-
-        powerplants_filter: Country not in ['Germany']
-        custom_powerplants: true
-
-    or
-
-    .. code:: yaml
-
-        powerplants_filter: Country not in ['Germany']
-        custom_powerplants: Country in ['Germany']
+    ``powerplants_filter: Country not in ['Germany']; custom_powerplants: true``
+        *or*
+    ``powerplants_filter: Country not in ['Germany']; custom_powerplants: Country in ['Germany']``
 
 
 3. Adding additional built year constraints:
+    ``powerplants_filter: Country not in ['Germany'] and YearCommissioned <= 2015; custom_powerplants: YearCommissioned <= 2015``
 
-    .. code:: yaml
 
-        powerplants_filter: Country not in ['Germany'] and YearCommissioned <= 2015
-        custom_powerplants: YearCommissioned <= 2015
+Inputs
+------
+- ``networks/base.nc``: Raw (unsimplified) network representation, trimmed to country selection
+- ``data/custom_powerplants.csv``: Custom powerplants in the same format as `powerplantmatching <https://github.com/FRESNA/powerplantmatching>`_ provides
+
+Outputs
+-------
+- ``resource/powerplants.csv``: A list of conventional power plants (i.e. neither wind nor solar) with fields for name, fuel type, technology, country, capacity in MW, duration, commissioning year, retrofit year, latitude, longitude, and dam information as documented in the `powerplantmatching README <https://github.com/FRESNA/powerplantmatching/blob/master/README.md>`_; additionally it includes information on the closest substation/bus in ``networks/base.nc``.
+    **Source:** `powerplantmatching on GitHub <https://github.com/FRESNA/powerplantmatching>`_
 
 """
 from _helpers import set_PROJdir

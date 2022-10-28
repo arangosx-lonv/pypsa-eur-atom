@@ -1,86 +1,37 @@
 # SPDX-FileCopyrightText: : 2017-2022 The PyPSA-Eur Authors
-#
 # SPDX-License-Identifier: MIT
-
 # coding: utf-8
 """
-Adds electrical generators and existing hydro storage units to a base network.
-
-Relevant Settings
------------------
-
-.. code:: yaml
-
-    costs:
-        year:
-        version:
-        dicountrate:
-        emission_prices:
-
-    electricity:
-        max_hours:
-        marginal_cost:
-        capital_cost:
-        conventional_carriers:
-        co2limit:
-        extendable_carriers:
-        estimate_renewable_capacities:
-
-
-    load:
-        scaling_factor:
-
-    renewable:
-        hydro:
-            carriers:
-            hydro_max_hours:
-            hydro_capital_cost:
-
-    lines:
-        length_factor:
-
-.. seealso::
-    Documentation of the configuration file ``config.yaml`` at :ref:`costs_cf`,
-    :ref:`electricity_cf`, :ref:`load_cf`, :ref:`renewable_cf`, :ref:`lines_cf`
-
-Inputs
-------
-
-- ``resources/costs.csv``: The database of cost assumptions for all included technologies for specific years from various sources; e.g. discount rate, lifetime, investment (CAPEX), fixed operation and maintenance (FOM), variable operation and maintenance (VOM), fuel costs, efficiency, carbon-dioxide intensity.
-- ``data/bundle/hydro_capacities.csv``: Hydropower plant store/discharge power capacities, energy storage capacity, and average hourly inflow by country.
-
-    .. image:: ../img/hydrocapacities.png
-        :scale: 34 %
-
-- ``data/geth2015_hydro_capacities.csv``: alternative to capacities above; not currently used!
-- ``resources/load.csv`` Hourly per-country load profiles.
-- ``resources/regions_onshore.geojson``: confer :ref:`busregions`
-- ``resources/nuts3_shapes.geojson``: confer :ref:`shapes`
-- ``resources/powerplants.csv``: confer :ref:`powerplants`
-- ``resources/profile_{}.nc``: all technologies in ``config["renewables"].keys()``, confer :ref:`renewableprofiles`.
-- ``networks/base.nc``: confer :ref:`base`
-
-Outputs
--------
-
-- ``networks/elec.nc``:
-
-    .. image:: ../img/elec.png
-            :scale: 33 %
-
 Description
 -----------
-
-The rule :mod:`add_electricity` ties all the different data inputs from the preceding rules together into a detailed PyPSA network that is stored in ``networks/elec.nc``. It includes:
+Adds electrical generators and existing hydro storage units to a base network, tying all the different data inputs from
+the preceding rules together into a detailed PyPSA network which includes
 
 - today's transmission topology and transfer capacities (optionally including lines which are under construction according to the config settings ``lines: under_construction`` and ``links: under_construction``),
 - today's thermal and hydro power generation capacities (for the technologies listed in the config setting ``electricity: conventional_carriers``), and
-- today's load time-series (upsampled in a top-down approach according to population and gross domestic product)
+- an up-to-date or synthetic load time-series (downscaled in a top-down approach according to population and GDP)
 
 It further adds extendable ``generators`` with **zero** capacity for
 
 - photovoltaic, onshore and AC- as well as DC-connected offshore wind installations with today's locational, hourly wind and solar capacity factors (but **no** current capacities),
 - additional open- and combined-cycle gas turbines (if ``OCGT`` and/or ``CCGT`` is listed in the config setting ``electricity: extendable_carriers``)
+
+Inputs
+------
+- ``data/costs.csv``: Cost assumptions for all included technologies for specific years from various sources; e.g. discount rate, lifetime, investment (CAPEX), fixed operation and maintenance (FOM), variable operation and maintenance (VOM), fuel costs, efficiency, carbon-dioxide intensity
+- ``data/hydro_capacities.csv``: Hydropower plant store/discharge power capacities, energy storage capacity, and average hourly inflow by country
+- ``data/geth2015_hydro_capacities.csv``: Alternative to capacities above; not currently used
+- ``data/load.csv`` Hourly per-country load profiles
+- ``intermediate_files/regions_onshore.geojson``: Bus-level Voronoi cells
+- ``intermediate_files/nuts3_shapes.geojson``: Regional shapes containing GDP and population data
+- ``intermediate_files/powerplants.csv``: A list of conventional power plants (i.e. neither wind nor solar) with fields for name, fuel type, technology, country, capacity in MW, duration, commissioning year, retrofit year, latitude, longitude, and dam information as documented in the `powerplantmatching README <https://github.com/FRESNA/powerplantmatching/blob/master/README.md>`_; additionally it includes information on the closest substation/bus in ``networks/base.nc``
+- ``intermediate_files/profile_{}.nc``: All technologies in ``config["renewables"].keys()``
+- ``networks/base.nc``: Raw (unsimplified) network representation, trimmed to country selection
+
+Outputs
+-------
+- ``networks/elec/elec.nc``: Unsimplified network representation with bus-level electricity supply and demand information
+
 """
 from _helpers import set_PROJdir, update_p_nom_max
 set_PROJdir()

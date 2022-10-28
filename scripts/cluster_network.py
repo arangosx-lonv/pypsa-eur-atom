@@ -1,127 +1,49 @@
 # SPDX-FileCopyrightText: : 2017-2022 The PyPSA-Eur Authors
-#
 # SPDX-License-Identifier: MIT
-
 # coding: utf-8
 """
+Description
+-----------
 Creates networks clustered to ``{cluster}`` number of zones with aggregated buses, generators and transmission corridors.
-
-Relevant Settings
------------------
-
-.. code:: yaml
-
-    clustering:
-      cluster_network:
-      aggregation_strategies:
-
-    country_weights:
-
-    solving:
-        solver:
-            name:
-
-    lines:
-        length_factor:
-
-.. seealso::
-    Documentation of the configuration file ``config.yaml`` at
-    :ref:`toplevel_cf`, :ref:`renewable_cf`, :ref:`solving_cf`, :ref:`lines_cf`
 
 Inputs
 ------
-
-- ``resources/regions_onshore_elec_s{simpl}.geojson``: confer :ref:`simplify`
-- ``resources/regions_offshore_elec_s{simpl}.geojson``: confer :ref:`simplify`
-- ``resources/busmap_elec_s{simpl}.csv``: confer :ref:`simplify`
-- ``networks/elec_s{simpl}.nc``: confer :ref:`simplify`
-- ``data/custom_busmap_elec_s{simpl}_{clusters}.csv``: optional input
+- ``intermediate_files/regions_onshore_elec_s.geojson``: Voronoi cells for simplified network buses
+- ``intermediate_files/regions_offshore_elec_s.geojson``: Voronoi cells for simplified network buses
+- ``networks/elec_s/elec_s.nc``: Base network after simplification step
+- ``intermediate_files/busmap_elec_s.csv``: Mapping of buses from ``elec.nc`` to ``elec_s.nc``
+- ``intermediate_files/tso_busmap.csv``: Mapping of buses to TSO's, paired with ``config['tso_weights']``
+- ``intermediate_files/custom_busmap_elec_s_{clusters}.csv``: Manually-defined mapping of buses to final clusters
 
 Outputs
 -------
-
-- ``resources/regions_onshore_elec_s{simpl}_{clusters}.geojson``:
-
-    .. image:: ../img/regions_onshore_elec_s_X.png
-        :scale: 33 %
-
-- ``resources/regions_offshore_elec_s{simpl}_{clusters}.geojson``:
-
-    .. image:: ../img/regions_offshore_elec_s_X.png
-        :scale: 33 %
-
-- ``resources/busmap_elec_s{simpl}_{clusters}.csv``: Mapping of buses from ``networks/elec_s{simpl}.nc`` to ``networks/elec_s{simpl}_{clusters}.nc``;
-- ``resources/linemap_elec_s{simpl}_{clusters}.csv``: Mapping of lines from ``networks/elec_s{simpl}.nc`` to ``networks/elec_s{simpl}_{clusters}.nc``;
-- ``networks/elec_s{simpl}_{clusters}.nc``:
-
-    .. image:: ../img/elec_s_X.png
-        :scale: 40  %
-
-Description
------------
+- ``intermediate_files/regions_onshore_elec_s_{clusters}.geojson``: Voronoi cells for clustered network buses
+- ``intermediate_files/regions_offshore_elec_s_{clusters}.geojson``: Voronoi cells for clustered network buses
+- ``intermediate_files/busmap_elec_s_{clusters}.csv``: Mapping of buses from ``elec_s.nc`` to ``elec_s_{clusters}.nc``;
+- ``intermediate_files/linemap_elec_s_{clusters}.csv``: Mapping of lines from ``elec_s.nc`` to ``elec_s_{clusters}.nc``;
+- ``networks/elec_s_{clusters}/elec_s_{clusters}.nc``: Clustered network representation
 
 .. note::
 
     **Why is clustering used both in** ``simplify_network`` **and** ``cluster_network`` **?**
 
-        Consider for example a network ``networks/elec_s100_50.nc`` in which
-        ``simplify_network`` clusters the network to 100 buses and in a second
-        step ``cluster_network``` reduces it down to 50 buses.
+        Consider for example a network ``networks/elec_s100_50.nc`` in which ``simplify_network`` clusters the network
+        to 100 buses and in a second step ``cluster_network``` reduces it down to 50 buses.
 
-        In preliminary tests, it turns out, that the principal effect of
-        changing spatial resolution is actually only partially due to the
-        transmission network. It is more important to differentiate between
-        wind generators with higher capacity factors from those with lower
-        capacity factors, i.e. to have a higher spatial resolution in the
+        In preliminary tests, it turns out, that the principal effect of changing spatial resolution is actually only
+        partially due to the transmission network. It is more important to differentiate between wind generators with
+        higher capacity factors from those with lower capacity factors, i.e. to have a higher spatial resolution in the
         renewable generation than in the number of buses.
 
-        The two-step clustering allows to study this effect by looking at
-        networks like ``networks/elec_s100_50m.nc``. Note the additional
-        ``m`` in the ``{cluster}`` wildcard. So in the example network
-        there are still up to 100 different wind generators.
+        The two-step clustering allows to study this effect by looking at networks like ``networks/elec_s100_50m.nc``.
+        Note the additional ``m`` in the ``{cluster}`` wildcard. So in the example network there are still up to 100
+        different wind generators.
 
-        In combination these two features allow you to study the spatial
-        resolution of the transmission network separately from the
-        spatial resolution of renewable generators.
-
-    **Is it possible to run the model without the** ``simplify_network`` **rule?**
-
-        No, the network clustering methods in the PyPSA module
-        `pypsa.networkclustering <https://github.com/PyPSA/PyPSA/blob/master/pypsa/networkclustering.py>`_
-        do not work reliably with multiple voltage levels and transformers.
-
-.. tip::
-    The rule :mod:`cluster_all_networks` runs
-    for all ``scenario`` s in the configuration file
-    the rule :mod:`cluster_network`.
-
-Exemplary unsolved network clustered to 512 nodes:
-
-.. image:: ../img/elec_s_512.png
-    :scale: 40  %
-    :align: center
-
-Exemplary unsolved network clustered to 256 nodes:
-
-.. image:: ../img/elec_s_256.png
-    :scale: 40  %
-    :align: center
-
-Exemplary unsolved network clustered to 128 nodes:
-
-.. image:: ../img/elec_s_128.png
-    :scale: 40  %
-    :align: center
-
-Exemplary unsolved network clustered to 37 nodes:
-
-.. image:: ../img/elec_s_37.png
-    :scale: 40  %
-    :align: center
+        In combination these two features allow you to study the spatial resolution of the transmission network
+        separately from the spatial resolution of renewable generators.
 
 """
 import os
-
 from _helpers import set_PROJdir, update_p_nom_max, get_aggregation_strategies
 set_PROJdir()
 

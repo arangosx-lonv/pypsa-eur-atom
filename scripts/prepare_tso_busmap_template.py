@@ -1,9 +1,3 @@
-# SPDX-FileCopyrightText: : 2017-2022 The PyPSA-Eur Authors
-#
-# SPDX-License-Identifier: MIT
-
-# coding: utf-8
-
 # Hacky "import" of set_PROJdir from _helpers.py, which is in another folder. Will find a more elegant solution later.
 import os
 import sys
