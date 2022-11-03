@@ -183,6 +183,8 @@ def distribute_clusters(n, n_clusters, country_weights=None, tso_weights = None,
         tso_busmap = pd.read_csv(filepaths.input.tso_busmap).set_index('Bus').squeeze()
         tso_busmap.index = tso_busmap.index.astype(str)
 
+        n.buses = n.buses.drop(columns = ['tso'], errors = 'ignore')
+
         n.buses = n.buses.merge(tso_busmap, left_index=True, right_index=True)
 
         N = n.buses.groupby(['country', 'tso']).size()
@@ -210,7 +212,7 @@ def distribute_clusters(n, n_clusters, country_weights=None, tso_weights = None,
                     L[country, tso] = t_weight * c_weight
 
                 remainder = [t not in tso_weights[country].keys() for t in L[country].index.get_level_values('tso')]
-                L[country][remainder] = L[country].loc[remainder].pipe(normed) * (1 - total_tso)
+                L[country][remainder] = L[country].loc[remainder].pipe(normed) * (1 - total_tso) * c_weight
             else:
                 L[country] = c_weight * L[country].transform(lambda x: normed(x))
 
@@ -248,13 +250,10 @@ def distribute_clusters(n, n_clusters, country_weights=None, tso_weights = None,
     results = opt.solve(m)
     assert results['Solver'][0]['Status'] == 'ok', f"Solver returned non-optimally: {results}"
 
-    print("Final node cluster distribution:")
-    print(pd.Series(m.n.get_values(), index=L.index).round().astype(int))
-
     return pd.Series(m.n.get_values(), index=L.index).round().astype(int)
 
 
-def busmap_for_n_clusters(n, n_clusters, solver_name, country_weights=None, tso_weights = None,
+def busmap_for_n_clusters(n, n_clusters, solver_name, country_weights=None, tso_weights=None,
                           algorithm="kmeans", feature=None, **algorithm_kwds):
     if algorithm == "kmeans":
         algorithm_kwds.setdefault('n_init', 1000)
@@ -301,8 +300,28 @@ def busmap_for_n_clusters(n, n_clusters, solver_name, country_weights=None, tso_
 
     n.determine_network_topology()
 
-    cluster_distribution = distribute_clusters(n, n_clusters, country_weights = country_weights,
-                                               tso_weights = tso_weights, solver_name=solver_name)
+    cluster_distribution = distribute_clusters(n, n_clusters, country_weights=country_weights,
+                                               tso_weights=tso_weights, solver_name=solver_name)
+
+    if config.get('cluster_override', False):
+        print("Manually overriding automatic cluster distribution.")
+
+        # Dummy weights used to produce a cluster distribution with a country-TSO structure
+        # country_weights = {config['countries'][0]: 0}
+        # tso_weights = {config['countries'][0]: {'TSO_unk': 0}}
+
+        cluster_distribution = distribute_clusters(n, n_clusters, country_weights=country_weights,
+                                                   tso_weights=tso_weights, solver_name=solver_name)
+
+        cluster_distribution = pd.Series(data=1, index=cluster_distribution.index)
+
+        clustering_rule = pd.DataFrame(columns=['country', 'TSO', 'data'],
+                                       data=np.array(config['clustering_rule'])
+                                       ).set_index(['country','TSO']).squeeze().astype('int32')
+        cluster_distribution.update(clustering_rule)
+
+    print("Final node cluster distribution:")
+    print(cluster_distribution)
 
     def busmap_for_country(x):
         prefix = x.name[0] + x.name[1] + ' '
@@ -331,8 +350,8 @@ def busmap_for_n_clusters(n, n_clusters, solver_name, country_weights=None, tso_
 
 def clustering_for_n_clusters(n, n_clusters, custom_busmap=False, aggregate_carriers=None,
                               line_length_factor=1.25, aggregation_strategies=dict(), solver_name="cbc",
-                              algorithm="hac", feature=None, extended_link_costs=0,
-                              country_weights=None, tso_weights = None):
+                              algorithm="kmeans", feature=None, extended_link_costs=0,
+                              country_weights=None, tso_weights=None):
 
     bus_strategies, generator_strategies = get_aggregation_strategies(aggregation_strategies)
 
@@ -455,13 +474,15 @@ if __name__ == "__main__":
 
         clustering.network.meta = config
 
-        if not os.path.exists(filepaths.output.network_folder(str(nclust))):
-            os.makedirs(filepaths.output.network_folder(str(nclust)))
-        clustering.network.export_to_netcdf(filepaths.output.network_file(str(nclust)))
-        clustering.network.export_to_csv_folder(filepaths.output.network_folder(str(nclust)))
+        n_clusters_final = clustering.network.buses.shape[0]
+
+        if not os.path.exists(filepaths.output.network_folder(str(n_clusters_final))):
+            os.makedirs(filepaths.output.network_folder(str(n_clusters_final)))
+        clustering.network.export_to_netcdf(filepaths.output.network_file(str(n_clusters_final)))
+        clustering.network.export_to_csv_folder(filepaths.output.network_folder(str(n_clusters_final)))
 
         # also available: linemap_positive, linemap_negative
-        getattr(clustering, 'busmap').to_csv(filepaths.output.busmap(str(nclust)))
-        getattr(clustering, 'linemap').to_csv(filepaths.output.linemap(str(nclust)))
+        getattr(clustering, 'busmap').to_csv(filepaths.output.busmap(str(n_clusters_final)))
+        getattr(clustering, 'linemap').to_csv(filepaths.output.linemap(str(n_clusters_final)))
 
-        cluster_regions((clustering.busmap,), filepaths.input, filepaths.output, str(nclust))
+        cluster_regions((clustering.busmap,), filepaths.input, filepaths.output, str(n_clusters_final))

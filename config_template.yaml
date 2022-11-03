@@ -20,6 +20,14 @@ clusters: [] # To keep all nodes (aside from stubs eliminated by simplify_networ
 #tso_weights: {'Country1': {'TSO_1': 0.4, 'TSO_2': 0.6},
 #              'Country2': {'TSO_3': 0.9}}
 
+## OPTIONAL: PROVIDE EXPLICIT COUNTRY-TSO COUNTS. For now, provide dummy TSO and country weights above to make sure the
+## clustering algorithm runs. Will be fixed in the future.
+# All other country-TSO combinations will cluster to a single node by default
+cluster_override: False
+clustering_rule: [['DE', 'Transnet', 25],
+                  ['DE', 'TSO_unk', 5],
+                  ['FR', 'TSO_unk', 3]]
+
 # This setting should be turned on if the user desires to manually assign each bus in the simplified network to a
 # cluster. The user must provide this file (PULL A RANDOM BUSMAP FILE TO PROVIDE A TEMPLATE)
 # If a custom busmap is provided, it will override all the clustering parameters above
