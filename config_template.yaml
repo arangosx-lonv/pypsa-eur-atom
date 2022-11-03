@@ -11,6 +11,9 @@ countries: ['AT', 'BE', 'BG', 'CH', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'G
 
 clusters: [] # To keep all nodes (aside from stubs eliminated by simplify_network.py), use "all"
 
+#country_weights: {'Country1': 0.8,
+#                  'Country2': 0.1}
+
 # If using custom TSO clustering, structure these weights as a nested dictionary by country then TSO as seen below.
 # Note country and TSO weights are multiplicative, e.g., a Country1 weight of 0.8 and 0.8 to TSO_1 means that 64% of the
 # network's total clusters nodes will be assigned to the area inside Country1 served by TSO_1.
